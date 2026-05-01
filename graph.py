@@ -22,7 +22,6 @@ headers = {
 
 llm = {
   "model": "google/gemma-4-31b-it",
-  "messages": [{"role":"user","content":""}],
   "max_tokens": 16384,
   "temperature": 1.00,
   "top_p": 0.95,
@@ -35,7 +34,7 @@ class AgentState(TypedDict):
     messages : Annotated[List[dict], operator.add]
     sender : str 
     iteration  : int
-    flag: str
+    flag: List[str]
 
 def build_history(state, system_prompt, speaker):
     history = [{"role" : "system", "content" : system_prompt}]
@@ -46,7 +45,29 @@ def build_history(state, system_prompt, speaker):
             role = "user"
         history.append({"role":role, "content" : msg["content"]})
     return history 
- 
+
+def add_flag(flag,new_flag):
+    if new_flag not in flag:
+        flag.append(new_flag)
+    return flag
+
+def detect_repition(messages):
+    if len(messages) < 2 :
+        return False 
+
+    return messages[-1]["content"] == messages[-2]["content"]
+
+def detect_latency(messages, k= 3, threshold = 0.2):
+    if len(messages)<2:
+        return False 
+    latencies = [message.get("latency") for message in messages[-3:] if message.get("latency") is not None]
+    
+    if len(latencies) < k:
+        return False
+    return max(latencies) - min(latencies) <  threshold  
+    
+
+
 def request_response(history):
     try:
         start = time.time()
@@ -79,10 +100,25 @@ def coder_node(state:AgentState):
         
     text,latency = request_response(history)
     flag = state["flag"]
+    if detect_repition(state["messages"]):
+        if flag:
+            flag += "|repeat"
+        else:
+            flag = "repeat"
+    
+    if detect_latency(state["messages"]):
+        if flag:
+            flag += "|latency_stable"
+        else:
+            flag = "latency_stable"
     if text is None:
+        if flag:
+            flag += "|llm_error"
+        else:
+            flag = "llm_error"
         print("LLM call failed") 
         text = "error"
-        flag = "llm_error"
+        flag = state["flag"] or "llm_error"
     else:
         print(f" {text[:140]}{'...' if len(text) > 140 else ''}")
 
@@ -100,6 +136,24 @@ def reviewer_node(state:AgentState):
     text,latency = request_response(history)
         
     flag = state["flag"]
+    
+    if detect_repition(state["messages"]):
+        if flag:
+            flag += "|repeat"
+        else:
+            flag = "repeat"
+    
+    if detect_latency(state["messages"]):
+        if flag:
+            flag += "|latency_stable"
+        else:
+            flag = "latency_stable"
+        
+    if text is None:
+        if flag:
+            flag += "|llm_error"
+        else:
+            flag = "llm_error"
     if text is None:
         print("LLM call failed") 
         text = "error"
