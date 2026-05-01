@@ -39,29 +39,49 @@ class AgentState(TypedDict):
     sender : str 
     iteration  : int
     flag: str
-    
- 
 
-def coder_node(state:AgentState):
-    history = [{"role" : "system", "sys_prompt" : CODER}]
+def build_history(state, system_prompt, speaker):
+    history = [{"role" : "system", "content" : system_prompt}]
     for msg in state["messages"]:
-        if msg["sender"] == "coder":
+        if msg["sender"] == speaker:
             role = "assistant"
         else:
             role = "user"
-        history.append({"role" : role, "content": msg["content"] })
-        
-    response = requests.post(
-    invoke_url,
-    headers=headers,
-    json={**llm, "messages": history},
-    timeout = 120)
-    data = response.json()
+    history.append({"role":role, "content" : msg["content"]})
+    return history 
+ 
+def request_response(history,state : AgentState):
+    try:
+        response = requests.post(
+            invoke_url,
+            headers=headers,
+            json={**llm, "messages": history},timeout = 120
+        )
+        response.raise_for_status()
+        data = response.json()
+    except requests.exceptions.Timeout:
+        print("Timeout Occured")
+        return state
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed, {e}")
+        return state
+    except Exception as e:
+        print(f"Unexpected error {e}")
+
+    start = time.time()    
     text = data["choices"][0]["message"]["content"]
-    print(f"  → {text[:140]}{'...' if len(text) > 140 else ''}")
+    latency = time.time()-start
+    
+    return text , latency 
+
+def coder_node(state:AgentState):
+    history = build_history(state,CODER,"coder")
+        
+    text,latency = request_response(history)
+    print(f" {text[:140]}{'...' if len(text) > 140 else ''}")
     
     return {
-        "messages" : [{"sender" : "coder","content" : text}],
+        "messages" : [{"sender" : "coder","content" : text,"latency" : latency}],
         "sender" : "coder",
         "iteration" : state["iteration"] + 1 ,
         "flag" : state["flag"],
@@ -69,24 +89,15 @@ def coder_node(state:AgentState):
 
 
 def reviewer_node(state:AgentState):
-    history = [{"role" : "system", "sys_prompt" : REVIEWER}]
-    for msg in state["messages"]:
-        if msg["sender"] == "reviewer":
-            role = "assistant"
-        else:
-            role = "user"
-        history.append({"role" : role, "content": msg["content"] })
+    history = build_history(state,REVIEWER,"reviewer")
         
-    response = requests.post(
-    invoke_url,
-    headers=headers,
-    json={**llm, "messages": history},timeout = 120)
-    data = response.json()
-    text = data["choices"][0]["message"]["content"]
-    print(f"  → {text[:140]}{'...' if len(text) > 140 else ''}")
+    text,latency = request_response(history)
+        
+    
+    print(f" {text[:140]}{'...' if len(text) > 140 else ''}")
     
     return {
-        "messages" : [{"sender" : "reviewer","content" : text}],
+        "messages" : [{"sender" : "reviewer","content" : text,"latency" : latency}],
         "sender" : "reviewer",
         "iteration" : state["iteration"] + 1 ,
         "flag" : state["flag"],
