@@ -51,7 +51,7 @@ def add_flag(flag,new_flag):
         flag.append(new_flag)
     return flag
 
-def detect_repition(messages):
+def detect_repetition(messages):
     if len(messages) < 2 :
         return False 
 
@@ -99,32 +99,34 @@ def coder_node(state:AgentState):
     history = build_history(state,CODER,"coder")
         
     text,latency = request_response(history)
-    flag = state["flag"]
-    if detect_repition(state["messages"]):
-        if flag:
-            flag += "|repeat"
-        else:
-            flag = "repeat"
+    flag = state["flag"][:]
     
-    if detect_latency(state["messages"]):
-        if flag:
-            flag += "|latency_stable"
-        else:
-            flag = "latency_stable"
     if text is None:
-        if flag:
-            flag += "|llm_error"
-        else:
-            flag = "llm_error"
+        flag = add_flag(flag,"llm_error")
         print("LLM call failed") 
-        text = "error"
-        flag = state["flag"] or "llm_error"
+        text = "[Error]"
+        
     else:
         print(f" {text[:140]}{'...' if len(text) > 140 else ''}")
+    
+    new_message = {
+        "sender" : "coder",
+        "content" : text,
+        "latency" : latency,
+        "timestamp" : time.time()
+    }
+    
+    updated_messages = state["messages"] + [new_message]
+    
+    if detect_repetition(updated_messages):
+        flag = add_flag(flag,"repeat")
+    
+    if detect_latency(updated_messages):
+        flag = add_flag(flag,"latency")
 
     
     return {
-        "messages" : [{"sender" : "coder","content" : text,"latency" : latency, "timestamp" : time.time()}],
+        "messages" : [new_message],
         "sender" : "coder",
         "iteration" : state["iteration"] + 1 ,
         "flag" : flag,
@@ -137,7 +139,7 @@ def reviewer_node(state:AgentState):
         
     flag = state["flag"]
     
-    if detect_repition(state["messages"]):
+    if detect_repetition(state["messages"]):
         if flag:
             flag += "|repeat"
         else:
@@ -167,8 +169,13 @@ def reviewer_node(state:AgentState):
         "flag" : flag,
     }
 
-
+def is_deadlock(flag):
+    return "repeat" in flag and "latency" in flag
+    
 def should_continue(state:AgentState):
+    
+    if is_deadlock:
+        return "end"
     if state["iteration"] >= MAX_TURNS:
         return "end"
     
