@@ -14,9 +14,6 @@ api_key = os.getenv("NVIDIA_API_KEY")
 invoke_url = "https://integrate.api.nvidia.com/v1/chat/completions"
 stream = False
 
-def read_b64(path):
-  with open(path, "rb") as f:
-    return base64.b64encode(f.read()).decode()
 
 headers = {
   "Authorization": f"Bearer {api_key}",
@@ -47,61 +44,73 @@ def build_history(state, system_prompt, speaker):
             role = "assistant"
         else:
             role = "user"
-    history.append({"role":role, "content" : msg["content"]})
+        history.append({"role":role, "content" : msg["content"]})
     return history 
  
-def request_response(history,state : AgentState):
+def request_response(history):
     try:
+        start = time.time()
         response = requests.post(
             invoke_url,
             headers=headers,
             json={**llm, "messages": history},timeout = 120
         )
         response.raise_for_status()
-        data = response.json()
+        data = response.json()  
+        text = data["choices"][0]["message"]["content"]
+        latency = time.time()-start
+        
+        
+        return text, latency
+    
     except requests.exceptions.Timeout:
         print("Timeout Occured")
-        return None
+    
     except requests.exceptions.RequestException as e:
         print(f"Request failed, {e}")
-        return None
+
     except Exception as e:
         print(f"Unexpected error {e}")
-        return None 
-
-    start = time.time()    
-    text = data["choices"][0]["message"]["content"]
-    latency = time.time()-start
     
-    return text , latency 
+    return None,None
 
 def coder_node(state:AgentState):
     history = build_history(state,CODER,"coder")
         
     text,latency = request_response(history)
-    print(f" {text[:140]}{'...' if len(text) > 140 else ''}")
+    flag = state["flag"]
+    if text is None:
+        print("LLM call failed") 
+        text = "error"
+        flag = "llm_error"
+    else:
+        print(f" {text[:140]}{'...' if len(text) > 140 else ''}")
+
     
     return {
-        "messages" : [{"sender" : "coder","content" : text,"latency" : latency}],
+        "messages" : [{"sender" : "coder","content" : text,"latency" : latency, "timestamp" : time.time()}],
         "sender" : "coder",
         "iteration" : state["iteration"] + 1 ,
-        "flag" : state["flag"],
+        "flag" : flag,
     }
 
 
 def reviewer_node(state:AgentState):
     history = build_history(state,REVIEWER,"reviewer")
-        
     text,latency = request_response(history)
         
-    
-    print(f" {text[:140]}{'...' if len(text) > 140 else ''}")
-    
+    flag = state["flag"]
+    if text is None:
+        print("LLM call failed") 
+        text = "error"
+        flag = "llm_error"
+    else:
+        print(f" {text[:140]}{'...' if len(text) > 140 else ''}")
     return {
-        "messages" : [{"sender" : "reviewer","content" : text,"latency" : latency}],
+        "messages" : [{"sender" : "reviewer","content" : text,"latency" : latency, "timestamp" : time.time()}],
         "sender" : "reviewer",
         "iteration" : state["iteration"] + 1 ,
-        "flag" : state["flag"],
+        "flag" : flag,
     }
 
 
