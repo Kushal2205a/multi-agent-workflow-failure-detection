@@ -20,3 +20,13 @@ def detect_latency(messages, k= 3, threshold = 0.2):
     
 def is_deadlock(flag):
     return "repeat" in flag and "latency" in flag
+
+def update_flag(flag, updated_messages):
+    
+    if detect_repetition(updated_messages):
+        flag = add_flag(flag,"repeat")
+    
+    if detect_latency(updated_messages):
+        flag = add_flag(flag,"latency")
+    
+    return flag 
