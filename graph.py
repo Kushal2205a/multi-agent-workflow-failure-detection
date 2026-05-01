@@ -39,7 +39,7 @@ class AgentState(TypedDict):
 
 def build_history(state, system_prompt, speaker):
     history = [{"role" : "system", "content" : system_prompt}]
-    for msg in state["messages"]:
+    for msg in state["messages"][-4:]:
         if msg["sender"] == speaker:
             role = "assistant"
         else:
@@ -125,9 +125,8 @@ def build_graph():
     workflow = StateGraph(AgentState)
     
     workflow.add_node("coder", coder_node)
-    time.sleep(1.5)
     workflow.add_node("reviewer", reviewer_node)
-    time.sleep(1.5)
+
     
     workflow.set_entry_point("coder")
     
