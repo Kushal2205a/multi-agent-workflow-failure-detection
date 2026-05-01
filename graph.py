@@ -61,12 +61,13 @@ def request_response(history,state : AgentState):
         data = response.json()
     except requests.exceptions.Timeout:
         print("Timeout Occured")
-        return state
+        return None
     except requests.exceptions.RequestException as e:
         print(f"Request failed, {e}")
-        return state
+        return None
     except Exception as e:
         print(f"Unexpected error {e}")
+        return None 
 
     start = time.time()    
     text = data["choices"][0]["message"]["content"]
