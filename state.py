@@ -7,3 +7,4 @@ class AgentState(TypedDict):
     sender : str 
     iteration  : int
     flag: List[str]
+    total_tokens: int
