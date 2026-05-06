@@ -1,4 +1,4 @@
-# Multi-Agent Workflow Failure Detection
+# Multi Agent Workflow Failure Detection
 
 A Streamlit dashboard for benchmarking multi agent LLM workflows and detecting inefficient looping behaviour in real time.
 
@@ -11,8 +11,6 @@ The project compares a baseline workflow against a protected workflow that uses 
 * Detects patterns such as repetition, stagnation, rejection loops, retry/error loops, and runaway escalation
 * Compares a baseline run with a detector-enabled run
 * Visualizes token growth and reviewer escalation over time
-
-## Why it matters
 
 Multi agent workflows often keep refining long after the useful part is over. This project shows how to detect those inefficient trajectories without adding an extra LLM judge on every turn.
 
