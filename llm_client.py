@@ -11,7 +11,7 @@ PROMPT = "Write a Python function that calculates the average of a list."
 
 client = OpenAI(
   base_url = "https://integrate.api.nvidia.com/v1",
-  api_key = f"{api_key}"
+  api_key = api_key
 )
 
 def request_response(history):
