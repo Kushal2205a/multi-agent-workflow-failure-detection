@@ -3,18 +3,24 @@ from config import MAX_TURNS
 from state import AgentState
 from monitor import is_deadlock
 from agents import coder_node, reviewer_node
+from llm_client import PROMPT
 
 
    
     
 def should_continue(state:AgentState):
+    print(f"[FLOW] sender={state['sender']} iteration={state['iteration']}")
     
-    if is_deadlock:
+    if is_deadlock(state):
+        print(f"Deadlock detected. Flags: {state['flag']}")
         return "end"
     if state["iteration"] >= MAX_TURNS:
         return "end"
     
-    return "reviewer" if state["sender"] == "coder" else "coder"
+    next_node = "reviewer" if state["sender"] == "coder" else "coder"
+    print(f"[FLOW] next -> {next_node}")
+    
+    return next_node
 
 def build_graph():
     
@@ -40,10 +46,11 @@ if __name__ == "__main__":
     app = build_graph()
     
     initial_state: AgentState = {
-        "messages" : [{"sender" : "user" , "content" : "Write a Python function that reverses a linked list."} ],
+        "messages" : [{"sender" : "user" , "content" : PROMPT} ],
         "sender" : "user",
         "iteration" : 0, 
-        "flag" : "",
+        "flag" : [],
+        "total_tokens":0
     }
     
     result = app.invoke(initial_state)
@@ -51,4 +58,4 @@ if __name__ == "__main__":
     for msg in result["messages"]:
         print(f"\n[{msg['sender'].upper()}]\n{msg['content']}")
  
-    print(f"\n\nTotal turns: {result['iteration']}")
+    print(f"\n\nTotal turns: {result['iteration']}, Total Tokens : {result['total_tokens']}")
