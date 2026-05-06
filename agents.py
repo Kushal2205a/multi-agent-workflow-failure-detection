@@ -3,7 +3,7 @@ from state import AgentState
 
 from monitor import add_flag,update_flag
 from llm_client import request_response 
-from config import CODER, REVIEWER
+
 
 from prompt_builder import build_history 
 
@@ -16,8 +16,8 @@ def make_coder_node(coder_prompt):
  
         if text is None:
             flag = add_flag(flag, "llm_error")
-            print("[CODER] LLM call failed")
-            text = "[Error]"
+            print("CODER : LLM call failed")
+            text = "Error !!!"
         else:
             print(f"[CODER | turn {state['iteration']}] {text[:120]}{'...' if len(text) > 120 else ''}")
  
@@ -41,6 +41,7 @@ def make_coder_node(coder_prompt):
             "flag":         flag,
             "total_tokens": total_tokens,
         }
+    time.sleep(1)
     return coder_node
  
  
@@ -52,8 +53,8 @@ def make_reviewer_node(reviewer_prompt):
  
         if text is None:
             flag = add_flag(flag, "llm_error")
-            print("[REVIEWER] LLM call failed")
-            text = "[Error]"
+            print("REVIEWER : LLM call failed")
+            text = "Error !!!"
         else:
             print(f"[REVIEWER | turn {state['iteration']}] {text[:120]}{'...' if len(text) > 120 else ''}")
  
@@ -77,4 +78,6 @@ def make_reviewer_node(reviewer_prompt):
             "flag":         flag,
             "total_tokens": total_tokens,
         }
+        
+    time.sleep(1)
     return reviewer_node
