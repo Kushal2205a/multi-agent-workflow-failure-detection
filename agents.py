@@ -11,7 +11,7 @@ from prompt_builder import build_history
 def coder_node(state:AgentState):
     history = build_history(state,CODER,"coder")
         
-    text,latency = request_response(history)
+    text,latency,tokens,error_flag = request_response(history)
     flag = state["flag"][:]
     
     if text is None:
@@ -26,12 +26,15 @@ def coder_node(state:AgentState):
         "sender" : "coder",
         "content" : text,
         "latency" : latency,
-        "timestamp" : time.time()
+        "timestamp" : time.time(),
+        "tokens" : tokens,
+        "error" : error_flag
     }
     
     updated_messages = state["messages"] + [new_message]
     
-    update_flag(flag,updated_messages)
+    flag = update_flag(flag,updated_messages)
+    total_tokens = state.get("total_tokens", 0) + tokens
 
     
     return {
@@ -39,12 +42,13 @@ def coder_node(state:AgentState):
         "sender" : "coder",
         "iteration" : state["iteration"] + 1 ,
         "flag" : flag,
+        "total_tokens" : total_tokens
     }
 
 
 def reviewer_node(state:AgentState):
     history = build_history(state,REVIEWER,"reviewer")
-    text,latency = request_response(history)
+    text,latency,tokens,error_flag = request_response(history)
     
     flag = state["flag"][:]
     
@@ -60,16 +64,19 @@ def reviewer_node(state:AgentState):
         "sender" : "reviewer",
         "content" : text,
         "latency" : latency,
-        "timestamp" : time.time()
+        "timestamp" : time.time(),
+        "tokens" : tokens,
+        "error" : error_flag
     }
     
     updated_messages = state["messages"] + [new_message]
     
-    update_flag(flag,updated_messages)
-
+    flag = update_flag(flag,updated_messages)
+    total_tokens = state.get("total_tokens", 0) + tokens
     return {
         "messages" : [new_message],
         "sender" : "reviewer",
         "iteration" : state["iteration"] + 1 ,
         "flag" : flag,
+        "total_tokens":total_tokens
     }
