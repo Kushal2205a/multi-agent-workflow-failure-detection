@@ -4,18 +4,6 @@ from config import MAX_TURNS
 
 
 def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentinel: bool = True):
-    """
-    Runs the graph and yields one dict per completed turn.
-    Caller renders each turn as it arrives.
-
-    Yields:
-        message      — new message dict (sender, content, tokens, latency, turn)
-        flags        — accumulated flags after this turn
-        new_flags    — flags that appeared for the first time this turn
-        iteration    — iteration count after this turn
-        total_tokens — running token total
-        deadlock     — True if sentinel fired on this turn
-    """
     app = build_graph(coder_prompt, reviewer_prompt, use_sentinel=use_sentinel)
 
     initial_state = {
