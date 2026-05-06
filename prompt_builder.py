@@ -1,6 +1,6 @@
 def build_history(state, system_prompt, speaker):
     history = [{"role" : "system", "content" : system_prompt}]
-    for msg in state["messages"][-4:]:
+    for msg in state["messages"][-6:]:
         if msg["sender"] == speaker:
             role = "assistant"
         else:
