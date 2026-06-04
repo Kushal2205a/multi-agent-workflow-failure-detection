@@ -109,7 +109,7 @@ def detect_escalation(messages):
     last = reviewer_msgs[-1].get("tokens", 0)
     prev = reviewer_msgs[-2].get("tokens", 1)
 
-    return last > prev * 1.5
+    return last > prev * 1.3
 
   
 def detect_error_loop(messages):
@@ -144,7 +144,7 @@ def is_deadlock(state):
         return True
 
     
-    if "escalation" in flag and itr >= 4:
+    if "escalation" in flag and itr >= 3:
         return True
 
     return False
