@@ -46,5 +46,5 @@ def request_response(history,client):
         return text, latency, tokens, False
 
     except Exception as e:
-        print(f"LLM Request failed: {e}")
+        print(f"LLM Request failed: {type(e).__name__}: {e}")
         return None, None, 0, True     
