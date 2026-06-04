@@ -4,7 +4,7 @@ from openai import OpenAI
 
 
 load_dotenv()
-api_key = os.getenv("NVIDIA_API_KEY")
+
 
 PROMPT = "Write a Python function that calculates the average of a list."
 
@@ -28,7 +28,7 @@ def request_response(history,client):
             messages=history,
             temperature=1,
             top_p=0.95,
-            max_tokens=2048,
+            max_tokens=1024,
             stream=False
         )
 
