@@ -8,10 +8,10 @@ from llm_client import request_response
 from prompt_builder import build_history 
 
 
-def make_coder_node(coder_prompt):
+def make_coder_node(coder_prompt,client):
     def coder_node(state: AgentState):
         history = build_history(state, coder_prompt, "coder")
-        text, latency, tokens, error_flag = request_response(history)
+        text, latency, tokens, error_flag = request_response(history,client)
         flag = state["flag"][:]
  
         if text is None:
@@ -45,10 +45,10 @@ def make_coder_node(coder_prompt):
     return coder_node
  
  
-def make_reviewer_node(reviewer_prompt):
+def make_reviewer_node(reviewer_prompt,client):
     def reviewer_node(state: AgentState):
         history = build_history(state, reviewer_prompt, "reviewer")
-        text, latency, tokens, error_flag = request_response(history)
+        text, latency, tokens, error_flag = request_response(history,client)
         flag = state["flag"][:]
  
         if text is None:

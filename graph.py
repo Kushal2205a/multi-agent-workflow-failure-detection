@@ -8,10 +8,10 @@ from llm_client import PROMPT
 from agents import make_coder_node, make_reviewer_node
  
  
-def build_graph(coder_prompt: str, reviewer_prompt: str, use_sentinel: bool = True):
+def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bool = True):
  
-    coder_node    = make_coder_node(coder_prompt)
-    reviewer_node = make_reviewer_node(reviewer_prompt)
+    coder_node    = make_coder_node(coder_prompt,client)
+    reviewer_node = make_reviewer_node(reviewer_prompt,client)
  
     def should_continue(state: AgentState):
         if use_sentinel and is_deadlock(state):

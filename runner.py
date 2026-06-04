@@ -1,10 +1,13 @@
 from graph import build_graph
 from monitor import is_deadlock
 from config import MAX_TURNS
-
+from llm_client import baseline_client, protected_client
 
 def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentinel: bool = True):
-    app = build_graph(coder_prompt, reviewer_prompt, use_sentinel=use_sentinel)
+    
+    client = protected_client if use_sentinel else baseline_client
+    
+    app = build_graph(coder_prompt, reviewer_prompt,client = client, use_sentinel=use_sentinel)
 
     initial_state = {
         "messages": [{
