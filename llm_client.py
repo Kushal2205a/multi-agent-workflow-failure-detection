@@ -7,9 +7,11 @@ load_dotenv()
 
 
 PROMPT = "Write a Python function that calculates the average of a list."
+def get_secret(key):
+    return os.getenv(key) or st.secrets.get(key, None)
 
-baseline_key  = os.getenv("NVIDIA_API_KEY_BASELINE") or st.secrets.get("NVIDIA_API_KEY_BASELINE")
-protected_key = os.getenv("NVIDIA_API_KEY_PROTECTED") or st.secrets.get("NVIDIA_API_KEY_PROTECTED")
+baseline_key  = get_secret("NVIDIA_API_KEY_BASELINE")
+protected_key = get_secret("NVIDIA_API_KEY_PROTECTED")
 
 baseline_client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
