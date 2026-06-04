@@ -1,24 +1,28 @@
 from dotenv import load_dotenv 
 import os,requests,time
 from openai import OpenAI
-
+import streamlit as st 
 
 load_dotenv()
 
 
 PROMPT = "Write a Python function that calculates the average of a list."
 
+baseline_key  = os.getenv("NVIDIA_API_KEY_BASELINE") or st.secrets.get("NVIDIA_API_KEY_BASELINE")
+protected_key = os.getenv("NVIDIA_API_KEY_PROTECTED") or st.secrets.get("NVIDIA_API_KEY_PROTECTED")
 
 baseline_client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
-    api_key=os.getenv("NVIDIA_API_KEY_BASELINE")
+    api_key= baseline_key
 )
+
 
 protected_client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
-    api_key=os.getenv("NVIDIA_API_KEY_PROTECTED")
+    api_key=protected_key
 )
-
+print("BASELINE key:", baseline_key[-6:] if baseline_key else "MISSING")
+print("PROTECTED key:", protected_key[-6:] if protected_key else "MISSING")
 def request_response(history,client):
     try:
         start = time.time()
