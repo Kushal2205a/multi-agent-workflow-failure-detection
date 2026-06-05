@@ -3,7 +3,9 @@
 import { useState, useRef, useCallback } from "react";
 import type { StreamEvent, WorkflowState, WorkflowSummary } from "@/types";
 
-const WS_URL = "ws://localhost:8000/ws";
+const WS_URL =
+  process.env.NEXT_PUBLIC_WS_URL ??
+  "ws://localhost:8000/ws";
 
 const INITIAL_STATE: WorkflowState = {
   rows: [],
