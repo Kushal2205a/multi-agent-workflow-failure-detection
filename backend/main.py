@@ -15,7 +15,7 @@ app = FastAPI(title="Deadlock Orchestrator Benchmark")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000","multi-agent-workflow-failure-detect.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
