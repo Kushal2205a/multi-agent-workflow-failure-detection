@@ -105,6 +105,15 @@ async def websocket_endpoint(websocket: WebSocket):
             pass
 
 
+@app.get("/")
+def root():
+    return {"status": "running"}
+
+@app.get("/health")
+def health():
+    return {
+        "status": "healthy"
+    }
 if __name__ == "__main__":
     import uvicorn
 
