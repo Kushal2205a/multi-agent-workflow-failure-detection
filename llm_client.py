@@ -1,14 +1,20 @@
-from dotenv import load_dotenv 
-import os,requests,time
+from dotenv import load_dotenv
+import os, requests, time
 from openai import OpenAI
-import streamlit as st 
 
 load_dotenv()
 
 
 PROMPT = "Write a Python function that calculates the average of a list."
 def get_secret(key):
-    return os.getenv(key) or st.secrets.get(key, None)
+    val = os.getenv(key)
+    if val:
+        return val
+    try:
+        import streamlit as st
+        return st.secrets.get(key, None)
+    except (ImportError, RuntimeError):
+        return None
 
 baseline_key  = get_secret("NVIDIA_API_KEY_BASELINE")
 protected_key = get_secret("NVIDIA_API_KEY_PROTECTED")

@@ -145,6 +145,7 @@ def is_deadlock(state):
 
     
     if "escalation" in flag and itr >= 3:
+        print(f"🔴 DEADLOCK: escalation at iteration {itr}, flags={flag}")
         return True
 
     return False
