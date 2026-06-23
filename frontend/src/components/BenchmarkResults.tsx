@@ -15,7 +15,7 @@ interface BenchmarkResultsProps {
   running: boolean;
 }
 
-function useBestSummary(
+function getBestSummary(
   rows: WorkflowState["rows"],
   summary: WorkflowSummary | null,
 ): WorkflowSummary {
@@ -46,14 +46,12 @@ export default function BenchmarkResults({
   } | null>(null);
   const toastTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null> = useRef(null);
 
+  const bs = getBestSummary(baseline.rows, baseline.summary);
+  const ps = getBestSummary(protectedState.rows, protectedState.summary);
+
   const hasCharts = baseline.rows.length > 0 || protectedState.rows.length > 0;
-  if (!baseline.summary && !protectedState.summary && !hasCharts) return null;
-
-  const bs = useBestSummary(baseline.rows, baseline.summary);
-  const ps = useBestSummary(protectedState.rows, protectedState.summary);
-
   const hasBoth = !!baseline.summary && !!protectedState.summary;
-  const hasResults = !running && (baseline.rows.length > 0 || protectedState.rows.length > 0);
+  const hasResults = !running && hasCharts;
 
   const tokensSaved = bs.total_tokens - ps.total_tokens;
   const turnsSaved = bs.turns - ps.turns;
@@ -96,6 +94,8 @@ export default function BenchmarkResults({
       setExporting(false);
     }
   }, [exporting, baseline, protectedState, task, coderPrompt, reviewerPrompt, showToast]);
+
+  if (!baseline.summary && !protectedState.summary && !hasCharts) return null;
 
   return (
     <div className="space-y-6">
