@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, END
 from config import MAX_TURNS
 from state import AgentState
-from monitor import is_deadlock, detect_approval
+from monitor import is_deadlock, detect_review_status
 from config import CODER, REVIEWER
   
 from llm_client import PROMPT
@@ -19,9 +19,9 @@ def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bo
         last_reviewer_preview = reviewer_msgs[-1]["content"][:100] if reviewer_msgs else "(none)"
         print(f"[should_continue] iter={state['iteration']} sender={state['sender']} msgs={len(msgs)} last_reviewer='{last_reviewer_preview}'")
 
-        approval = detect_approval(msgs)
-        print(f"[should_continue] detect_approval={approval}")
-        if approval:
+        status = detect_review_status(msgs)
+        print(f"[should_continue] review_status={status}")
+        if status == "approved":
             print(f"Task completed at iteration {state['iteration']}. Reason: reviewer_approved")
             return "end"
         if use_sentinel and is_deadlock(state):

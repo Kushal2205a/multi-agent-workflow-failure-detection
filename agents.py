@@ -1,7 +1,7 @@
 import time 
 from state import AgentState
 
-from monitor import add_flag,update_flag, detect_approval
+from monitor import add_flag,update_flag, detect_review_status
 from llm_client import request_response 
 
 
@@ -77,8 +77,9 @@ def make_reviewer_node(reviewer_prompt,client):
         flag = update_flag(flag, updated_messages)
         total_tokens = state.get("total_tokens", 0) + (tokens or 0)
 
-        task_completed = detect_approval(updated_messages)
-        print(f"[reviewer_node] detect_approval returned: {task_completed} (messages count: {len(updated_messages)})")
+        status = detect_review_status(updated_messages)
+        task_completed = (status == "approved")
+        print(f"[reviewer_node] review_status={status} task_completed={task_completed}")
         if task_completed and not state.get("task_completed"):
             completion_turn = state["iteration"] + 1
             completion_reason = "reviewer_approved"

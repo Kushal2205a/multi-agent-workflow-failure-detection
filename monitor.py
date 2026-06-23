@@ -1,28 +1,35 @@
 import re
 
-APPROVAL_KEYWORDS = [
-    "approved",
-    "approve",
-    "accepted",
-    "satisfies the requirements",
-    "no further changes required",
-    "ready to merge",
-]
+REVIEW_STATUS_APPROVED = "STATUS: APPROVED"
+REVIEW_STATUS_CHANGES_REQUIRED = "STATUS: CHANGES_REQUIRED"
 
-def detect_approval(messages):
+
+def detect_review_status(messages):
+    """Check if the latest reviewer message contains a structured review status.
+
+    Returns:
+        "approved" if STATUS: APPROVED is present
+        "changes_required" if STATUS: CHANGES_REQUIRED is present
+        None if no valid status is found
+    """
     reviewer_msgs = [m for m in messages if m["sender"] == "reviewer"]
     if not reviewer_msgs:
-        print(f"[detect_approval] No reviewer messages found (total messages: {len(messages)})")
-        return False
+        return None
+
     last = reviewer_msgs[-1]
-    text = last["content"].lower()
-    print(f"[detect_approval] Checking last reviewer msg (turn ~{last.get('turn', '?')}): {text[:150]}")
-    for kw in APPROVAL_KEYWORDS:
-        if kw in text:
-            print(f"Approval detected: \"{kw}\" in reviewer message")
-            return True
-    print(f"[detect_approval] No approval keyword matched. Keywords: {APPROVAL_KEYWORDS}")
-    return False
+    text = last["content"].strip().upper()
+
+    if REVIEW_STATUS_APPROVED in text:
+        print("[review_status] APPROVED")
+        return "approved"
+    elif REVIEW_STATUS_CHANGES_REQUIRED in text:
+        print("[review_status] CHANGES_REQUIRED")
+        return "changes_required"
+    else:
+        last_lines = last["content"].strip().split("\n")[-3:]
+        preview = " | ".join(line.strip() for line in last_lines)
+        print(f"[review_status] WARNING: No structured status found (last lines: {preview})")
+        return None
 
 def contains_keyword(text, keywords):
     for keyword in keywords:
