@@ -33,6 +33,13 @@ print("BASELINE key:", baseline_key[-6:] if baseline_key else "MISSING")
 print("PROTECTED key:", protected_key[-6:] if protected_key else "MISSING")
 def request_response(history,client):
     try:
+        print(f"\n## LLM REQUEST ({len(history)} messages)")
+        for i, msg in enumerate(history):
+            role = msg.get("role", "?")
+            content = msg.get("content", "")[:300]
+            print(f"  [{i}] {role}: {content}")
+        print("")
+
         start = time.time()
 
         response = client.chat.completions.create(
