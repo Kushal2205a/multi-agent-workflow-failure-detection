@@ -45,6 +45,15 @@ check("bold colon prefix changes", "**STATUS**: CHANGES_REQUIRED", "changes_requ
 check("bold value changes", "STATUS: **CHANGES_REQUIRED**", "changes_required")
 check("underscore bold changes", "__STATUS__: CHANGES_REQUIRED", "changes_required")
 
+# ── Previously-failing real-world patterns ─────────────────────────
+check("both bolded", "**STATUS:** **CHANGES_REQUIRED**", "changes_required")
+check("both bolded 2space", "**STATUS:**  **CHANGES_REQUIRED**", "changes_required")
+check("colon newline bold", "**STATUS:**\n\n**CHANGES_REQUIRED**", "changes_required")
+check("overall status", "**OVERALL STATUS:** **CHANGES_REQUIRED**", "changes_required")
+check("overall status newline", "**OVERALL STATUS:**\n\n**CHANGES_REQUIRED**", "changes_required")
+check("both bolded approved", "**STATUS:** **APPROVED**", "approved")
+check("overall status approved", "**OVERALL STATUS:** **APPROVED**", "approved")
+
 # ── negative tests ─────────────────────────────────────────────────
 check("no status", "The code looks good.", None)
 check("partial match only", "APPROVED status", None)

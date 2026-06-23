@@ -1,7 +1,7 @@
 import re
 
 STATUS_REGEX = re.compile(
-    r"\*{0,2}_{0,2}`?STATUS\*{0,2}_{0,2}`?:?\s*\*{0,2}_{0,2}`?\s*(APPROVED|CHANGES_REQUIRED)",
+    r"\*{0,2}_{0,2}`?(?:OVERALL )?STATUS\*{0,2}_{0,2}`?:?\s*(?:\*{0,2}_{0,2}`?\s*)*(APPROVED|CHANGES_REQUIRED)",
     re.IGNORECASE,
 )
 
@@ -40,6 +40,23 @@ def detect_review_status(messages):
         return "changes_required"
 
     print("[review_status] WARNING: No structured status found")
+    # Diagnostic: show last 300 chars repr to detect invisible chars
+    tail = repr(raw[-300:])
+    print(f"[review_status] DIAG tail(300)={tail}")
+    # Find all "STATUS" positions
+    idx = 0
+    positions = []
+    while True:
+        idx = raw.upper().find("STATUS", idx)
+        if idx < 0:
+            break
+        positions.append(idx)
+        idx += 1
+    if positions:
+        for p in positions:
+            print(f"[review_status] DIAG 'STATUS' at pos {p}: {repr(raw[p:p+60])}")
+    else:
+        print(f"[review_status] DIAG no 'STATUS' found in message")
     return None
 
 def contains_keyword(text, keywords):
