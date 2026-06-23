@@ -45,7 +45,7 @@ def request_response(history,client):
         response = client.chat.completions.create(
             model="google/gemma-2-2b-it",
             messages=history,
-            temperature=1,
+            temperature=0.2,
             top_p=0.95,
             max_tokens=1024,
             stream=False
