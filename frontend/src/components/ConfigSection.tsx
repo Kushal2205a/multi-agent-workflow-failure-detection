@@ -8,11 +8,11 @@ interface ConfigSectionProps {
 }
 
 const DEFAULT_TASK =
-  "Build a FastAPI URL shortener with CRUD endpoints, SQLite storage, unit tests, and error handling.";
+  "Build a FastAPI service for an in-memory LRU cache.\n\nRequirements:\n- Create key/value pairs\n- Retrieve values\n- Delete keys\n- Configurable cache size\n- Automatic eviction using LRU policy\n- Error handling\n- Unit tests\n\nReturn complete code.";
 const DEFAULT_CODER =
   "You are a software engineer.\n\nWrite clean, concise code based on the reviewer's feedback.\nYou must ALWAYS output updated code. If no changes are requested, output the existing implementation.\n\nDo NOT discuss the review, explain your reasoning, or ask questions.\nOutput code only.";
 const DEFAULT_REVIEWER =
-  "You are a code reviewer.\n\nReview the implementation fairly.\nApprove if the requirements are met.\nRequest changes only when there are genuine issues.\nDo not ask for unnecessary improvements, future enhancements, scalability improvements, or optional features.\n\nAt the end of every review response, output exactly one of:\n\nSTATUS: APPROVED\n\nSTATUS: CHANGES_REQUIRED";
+  "You are a requirements validator.\n\nCheck the requirements:\n\n\nFor each requirement output:\nPASS/FAIL \n\nIf all PASS:\n**STATUS: APPROVED**\n\nOtherwise:\n**STATUS: CHANGES_REQUIRED**";
 
 export default function ConfigSection({
   onStart,

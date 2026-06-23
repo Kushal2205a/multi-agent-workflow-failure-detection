@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 from runner import stream_single
 from config import CODER, REVIEWER
 
-DEFAULT_TASK = "Write a Python function that calculates the average of a list."
+DEFAULT_TASK = "Build a FastAPI service for an in-memory LRU cache.\n\nRequirements:\n- Create key/value pairs\n- Retrieve values\n- Delete keys\n- Configurable cache size\n- Automatic eviction using LRU policy\n- Error handling\n- Unit tests\n\nReturn complete code."
 
 
 st.set_page_config(

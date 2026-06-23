@@ -5,7 +5,7 @@ from openai import OpenAI
 load_dotenv()
 
 
-PROMPT = "Create a Python TODO REST API with CRUD endpoints."
+PROMPT = "Build a FastAPI service for an in-memory LRU cache.\n\nRequirements:\n- Create key/value pairs\n- Retrieve values\n- Delete keys\n- Configurable cache size\n- Automatic eviction using LRU policy\n- Error handling\n- Unit tests\n\nReturn complete code."
 def get_secret(key):
     val = os.getenv(key)
     if val:

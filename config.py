@@ -6,17 +6,18 @@ You must ALWAYS output updated code. If no changes are requested, output the exi
 Do NOT discuss the review, explain your reasoning, or ask questions.
 Output code only."""
 
-REVIEWER = REVIEWER_SYSTEM = """You are a code reviewer.
+REVIEWER = REVIEWER_SYSTEM = """You are a requirements validator.
 
-Review the implementation fairly.
-Approve if the requirements are met.
-Request changes only when there are genuine issues.
-Do not ask for unnecessary improvements, future enhancements, scalability improvements, or optional features.
+Check the requirements:
 
-At the end of every review response, output exactly one of:
 
-STATUS: APPROVED
+For each requirement output:
+PASS/FAIL 
 
-STATUS: CHANGES_REQUIRED"""
+If all PASS:
+**STATUS: APPROVED**
+
+Otherwise:
+**STATUS: CHANGES_REQUIRED**"""
 
 MAX_TURNS = 10

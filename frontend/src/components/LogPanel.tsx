@@ -7,6 +7,20 @@ interface LogPanelProps {
   logs: LogEntry[];
 }
 
+function downloadLogs(logs: LogEntry[]) {
+  if (logs.length === 0) return;
+  const lines = logs.map(
+    (l) => `[${new Date(l.timestamp).toLocaleTimeString("en-US", { hour12: false })}] [${l.workflow.toUpperCase()}] ${l.message}`,
+  );
+  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `benchmark_logs_${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function formatTime(ts: string): string {
   const d = new Date(ts);
   return d.toLocaleTimeString("en-US", { hour12: false });
@@ -33,30 +47,54 @@ export default function LogPanel({ logs }: LogPanelProps) {
 
   return (
     <div className="rounded-xl border border-charcoal-700 bg-[#181818] overflow-hidden">
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center justify-between w-full px-5 py-3 text-sm text-gray-400 hover:text-white transition-colors"
-      >
-        <span className="font-medium uppercase tracking-wider text-xs">
-          Debug Logs
-          {logs.length > 0 && (
-            <span className="ml-2 text-gray-600 font-normal normal-case">
-              ({logs.length} lines)
-            </span>
-          )}
-        </span>
-        <svg
-          className={`w-4 h-4 transition-transform ${collapsed ? "" : "rotate-180"}`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+      <div className="flex items-center justify-between w-full px-5 py-3 text-sm text-gray-400">
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex items-center gap-1.5 hover:text-white transition-colors"
         >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
+          <span className="font-medium uppercase tracking-wider text-xs">
+            Debug Logs
+            {logs.length > 0 && (
+              <span className="ml-2 text-gray-600 font-normal normal-case">
+                ({logs.length} lines)
+              </span>
+            )}
+          </span>
+          <svg
+            className={`w-4 h-4 transition-transform ${collapsed ? "" : "rotate-180"}`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+        {logs.length > 0 && (
+          <button
+            onClick={() => downloadLogs(logs)}
+            className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-gray-500 hover:text-white hover:bg-charcoal-700 transition-colors"
+            title="Download logs"
+          >
+            <svg
+              className="w-3.5 h-3.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Export Logs
+          </button>
+        )}
+      </div>
 
       {!collapsed && (
         <div
