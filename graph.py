@@ -19,6 +19,10 @@ def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bo
         last_reviewer_preview = reviewer_msgs[-1]["content"][:100] if reviewer_msgs else "(none)"
         print(f"[should_continue] iter={state['iteration']} sender={state['sender']} msgs={len(msgs)} last_reviewer='{last_reviewer_preview}'")
 
+        print(f"\n[should_continue] RAW REVIEWER MESSAGE (full):")
+        print(repr(reviewer_msgs[-1]["content"] if reviewer_msgs else ""))
+        print(f"[should_continue] end of raw message\n")
+
         status = detect_review_status(msgs)
         print(f"[should_continue] review_status={status}")
         if status == "approved":

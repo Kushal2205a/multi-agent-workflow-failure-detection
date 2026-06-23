@@ -77,6 +77,10 @@ def make_reviewer_node(reviewer_prompt,client):
         flag = update_flag(flag, updated_messages)
         total_tokens = state.get("total_tokens", 0) + (tokens or 0)
 
+        print(f"\n[reviewer_node] RAW REVIEWER MESSAGE (full):")
+        print(repr(text))
+        print(f"[reviewer_node] end of raw message\n")
+
         status = detect_review_status(updated_messages)
         task_completed = (status == "approved")
         print(f"[reviewer_node] review_status={status} task_completed={task_completed}")
