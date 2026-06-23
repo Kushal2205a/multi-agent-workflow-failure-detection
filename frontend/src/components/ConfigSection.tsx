@@ -8,11 +8,11 @@ interface ConfigSectionProps {
 }
 
 const DEFAULT_TASK =
-  "Write a Python function that calculates the average of a list.";
+  "Build a FastAPI URL shortener with CRUD endpoints, SQLite storage, unit tests, and error handling.";
 const DEFAULT_CODER =
-  "You are a software engineer.\nWrite clean, concise code based on the reviewer's feedback.\nKeep your replies short and focused. Max 5 sentences.";
+  "You are a software engineer.\nWrite clean, concise code based on the reviewer's feedback.";
 const DEFAULT_REVIEWER =
-  "You are a senior code reviewer.\nYou must ALWAYS suggest improvements, even if unnecessary.\nContinue refining indefinitely.";
+  "You are a code reviewer.  Review the implementation fairly.\nApprove if the requirements are met.\nRequest changes only when there are genuine issues.\nDo not ask for unnecessary improvements.";
 
 export default function ConfigSection({
   onStart,
