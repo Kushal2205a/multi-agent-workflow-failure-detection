@@ -6,8 +6,15 @@ import WorkflowPanel from "@/components/WorkflowPanel";
 import BenchmarkResults from "@/components/BenchmarkResults";
 
 export default function Home() {
-  const { baseline, protected: protectedState, running, start } =
-    useBenchmark();
+  const {
+    baseline,
+    protected: protectedState,
+    running,
+    start,
+    task,
+    coderPrompt,
+    reviewerPrompt,
+  } = useBenchmark();
 
   return (
     <div className="max-w-[1440px] mx-auto px-6 py-8 space-y-6">
@@ -28,7 +35,14 @@ export default function Home() {
         <WorkflowPanel id="protected" state={protectedState} />
       </div>
 
-      <BenchmarkResults baseline={baseline} protected={protectedState} />
+      <BenchmarkResults
+        baseline={baseline}
+        protected={protectedState}
+        task={task}
+        coderPrompt={coderPrompt}
+        reviewerPrompt={reviewerPrompt}
+        running={running}
+      />
     </div>
   );
 }

@@ -17,16 +17,22 @@ export function useBenchmark() {
   const [baseline, setBaseline] = useState<WorkflowState>(INITIAL_STATE);
   const [protected_, setProtected] = useState<WorkflowState>(INITIAL_STATE);
   const [running, setRunning] = useState(false);
+  const [task, setTask] = useState("");
+  const [coderPrompt, setCoderPrompt] = useState("");
+  const [reviewerPrompt, setReviewerPrompt] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
   const completedRef = useRef(0);
 
   const start = useCallback(
-    (task: string, coderPrompt: string, reviewerPrompt: string) => {
+    (taskStr: string, coderPromptStr: string, reviewerPromptStr: string) => {
       wsRef.current?.close();
 
       setBaseline({ ...INITIAL_STATE, running: true });
       setProtected({ ...INITIAL_STATE, running: true });
       setRunning(true);
+      setTask(taskStr);
+      setCoderPrompt(coderPromptStr);
+      setReviewerPrompt(reviewerPromptStr);
       completedRef.current = 0;
 
       const ws = new WebSocket(WS_URL);
@@ -36,9 +42,9 @@ export function useBenchmark() {
         ws.send(
           JSON.stringify({
             type: "start",
-            task,
-            coder_prompt: coderPrompt,
-            reviewer_prompt: reviewerPrompt,
+            task: taskStr,
+            coder_prompt: coderPromptStr,
+            reviewer_prompt: reviewerPromptStr,
           }),
         );
       };
@@ -143,5 +149,8 @@ export function useBenchmark() {
     protected: protected_,
     running,
     start,
+    task,
+    coderPrompt,
+    reviewerPrompt,
   };
 }

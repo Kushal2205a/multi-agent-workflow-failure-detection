@@ -1,12 +1,18 @@
 "use client";
 
+import { useState, useEffect, useCallback, useRef, type MutableRefObject } from "react";
 import type { WorkflowState, WorkflowSummary } from "@/types";
+import { generateCSV, downloadCSV } from "@/lib/exportCSV";
 import TokenChart from "./TokenChart";
 import ReviewerChart from "./ReviewerChart";
 
 interface BenchmarkResultsProps {
   baseline: WorkflowState;
   protected: WorkflowState;
+  task: string;
+  coderPrompt: string;
+  reviewerPrompt: string;
+  running: boolean;
 }
 
 function useBestSummary(
@@ -27,7 +33,19 @@ function useBestSummary(
 export default function BenchmarkResults({
   baseline,
   protected: protectedState,
+  task,
+  coderPrompt,
+  reviewerPrompt,
+  running,
 }: BenchmarkResultsProps) {
+  const [exporting, setExporting] = useState(false);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+    exiting: boolean;
+  } | null>(null);
+  const toastTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null> = useRef(null);
+
   const hasCharts = baseline.rows.length > 0 || protectedState.rows.length > 0;
   if (!baseline.summary && !protectedState.summary && !hasCharts) return null;
 
@@ -35,16 +53,133 @@ export default function BenchmarkResults({
   const ps = useBestSummary(protectedState.rows, protectedState.summary);
 
   const hasBoth = !!baseline.summary && !!protectedState.summary;
+  const hasResults = !running && (baseline.rows.length > 0 || protectedState.rows.length > 0);
 
   const tokensSaved = bs.total_tokens - ps.total_tokens;
   const turnsSaved = bs.turns - ps.turns;
   const pctSaved = bs.total_tokens > 0 ? (tokensSaved / bs.total_tokens) * 100 : 0;
 
+  const showToast = useCallback((message: string, type: "success" | "error") => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type, exiting: false });
+
+    toastTimerRef.current = setTimeout(() => {
+      setToast((prev) => (prev ? { ...prev, exiting: true } : null));
+      setTimeout(() => setToast(null), 300);
+    }, 3700);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  const handleExport = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const csv = generateCSV(
+        baseline,
+        protectedState,
+        task,
+        coderPrompt,
+        reviewerPrompt,
+      );
+      downloadCSV(csv);
+      showToast("Benchmark results exported successfully.", "success");
+    } catch {
+      showToast("Failed to generate CSV.", "error");
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, baseline, protectedState, task, coderPrompt, reviewerPrompt, showToast]);
+
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-white">
-        Benchmark Results
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-white">
+          Benchmark Results
+        </h2>
+        <div
+          title={!hasResults && !exporting ? "Run a benchmark to enable export" : undefined}
+        >
+          <button
+            onClick={handleExport}
+            disabled={!hasResults || exporting}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all
+              bg-charcoal-700 hover:bg-charcoal-600 active:bg-charcoal-500 text-white
+              disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-charcoal-700"
+          >
+            {exporting ? (
+              <>
+                <svg
+                  className="w-4 h-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    className="opacity-25"
+                  />
+                  <path
+                    d="M12 2a10 10 0 0 1 10 10"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                Generating CSV...
+              </>
+            ) : (
+              <>
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Export Results (CSV)
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {toast && (
+        <div
+          className="fixed bottom-6 right-6 z-50 max-w-sm"
+          style={{
+            animation: toast.exiting
+              ? "toast-out 0.3s ease-in forwards"
+              : "toast-in 0.3s ease-out",
+          }}
+        >
+          <div
+            className={`rounded-lg px-4 py-3 text-sm text-white shadow-xl border ${
+              toast.type === "success"
+                ? "bg-charcoal-800 border-l-4 border-l-green-500 border-t-charcoal-700 border-r-charcoal-700 border-b-charcoal-700"
+                : "bg-charcoal-800 border-l-4 border-l-red-500 border-t-charcoal-700 border-r-charcoal-700 border-b-charcoal-700"
+            }`}
+          >
+            {toast.message}
+          </div>
+        </div>
+      )}
 
       {hasBoth && (
         <div className="grid grid-cols-3 gap-4">
