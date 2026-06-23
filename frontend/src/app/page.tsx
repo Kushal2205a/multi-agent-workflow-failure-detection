@@ -37,7 +37,7 @@ export default function Home() {
         <WorkflowPanel id="protected" state={protectedState} />
       </div>
 
-      {(logs.length > 0 || running) && <LogPanel logs={logs} />}
+      <LogPanel logs={logs} />
 
       <BenchmarkResults
         baseline={baseline}
