@@ -5,7 +5,7 @@ from openai import OpenAI
 load_dotenv()
 
 
-PROMPT = "Write a Python function that calculates the average of a list."
+PROMPT = "Create a Python TODO REST API with CRUD endpoints."
 def get_secret(key):
     val = os.getenv(key)
     if val:

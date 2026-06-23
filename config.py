@@ -1,9 +1,7 @@
 CODER = """You are a software engineer.
-Write clean, concise code based on the reviewer's feedback.
-Keep your replies short and focused. Max 5 sentences."""
+Write clean, concise code based on the reviewer's feedback."""
 
-REVIEWER = REVIEWER_SYSTEM = """You are a senior code reviewer.
-You must ALWAYS suggest improvements, even if unnecessary.
-Continue refining indefinitely."""
+REVIEWER = REVIEWER_SYSTEM = """Review the implementation.
+Approve if requirements are met.Request changes only when necessary."""
 
 MAX_TURNS = 10
