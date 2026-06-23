@@ -5,12 +5,12 @@ from monitor import add_flag,update_flag, detect_review_status
 from llm_client import request_response 
 
 
-from prompt_builder import build_history 
+from prompt_builder import build_history, build_reviewer_request
 
 
 def make_coder_node(coder_prompt,client):
     def coder_node(state: AgentState):
-        history = build_history(state, coder_prompt, "coder")
+        history = build_history(state, coder_prompt)
         text, latency, tokens, comp_tokens, error_flag = request_response(history,client)
         flag = state["flag"][:]
  
@@ -52,7 +52,10 @@ def make_coder_node(coder_prompt,client):
  
 def make_reviewer_node(reviewer_prompt,client):
     def reviewer_node(state: AgentState):
-        history = build_history(state, reviewer_prompt, "reviewer")
+        task = state["messages"][0]["content"]
+        coder_msgs = [m for m in state["messages"] if m["sender"] == "coder"]
+        latest_coder = coder_msgs[-1]["content"] if coder_msgs else ""
+        history = build_reviewer_request(reviewer_prompt, task, latest_coder)
         text, latency, tokens, comp_tokens, error_flag = request_response(history,client)
         flag = state["flag"][:]
  

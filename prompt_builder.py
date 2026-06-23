@@ -1,6 +1,6 @@
-def build_history(state, system_prompt, speaker):
+def build_history(state, system_prompt):
     """
-    Build chat history with strict role alternation.
+    Build chat history for the coder node with strict role alternation.
 
     Structure:
       1. First message = user role: system prompt + original task (always pinned)
@@ -8,8 +8,8 @@ def build_history(state, system_prompt, speaker):
          with roles strictly alternating: assistant, user, assistant, user, ...
 
     The NVIDIA API with Gemma-2-2b-it enforces strict alternation of
-    user/assistant roles. This function guarantees that constraint
-    regardless of which agent is building the history.
+    user/assistant roles. The coder context always has an even number of
+    messages, so alternation always ends with 'user'.
     """
     all_messages = state["messages"]
 
@@ -27,3 +27,28 @@ def build_history(state, system_prompt, speaker):
         next_role = "user" if next_role == "assistant" else "assistant"
 
     return messages
+
+
+def build_reviewer_request(reviewer_prompt, task, latest_coder_output):
+    """
+    Build a stateless reviewer request as a single user message.
+
+    The reviewer only needs:
+      1. Its role prompt (instructions + STATUS protocol)
+      2. The original task
+      3. The latest implementation to evaluate
+
+    This avoids:
+      - NVIDIA role alternation issues (single [user] message always valid)
+      - Reviewer drift from accumulated conversation context
+      - Reviewer generating code instead of review
+      - Unnecessary context growth
+
+    Returns: list with a single {"role": "user", "content": ...} message.
+    """
+    content = (
+        f"{reviewer_prompt}\n\n"
+        f"Original task:\n{task}\n\n"
+        f"Implementation to review:\n{latest_coder_output}"
+    )
+    return [{"role": "user", "content": content}]
