@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, END
 from config import MAX_TURNS
 from state import AgentState
-from monitor import is_deadlock
+from monitor import is_deadlock, detect_approval
 from config import CODER, REVIEWER
   
 from llm_client import PROMPT
@@ -14,8 +14,8 @@ def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bo
     reviewer_node = make_reviewer_node(reviewer_prompt,client)
  
     def should_continue(state: AgentState):
-        if state.get("task_completed"):
-            print(f"Task completed at iteration {state['iteration']}. Reason: {state.get('completion_reason', 'unknown')}")
+        if detect_approval(state["messages"]):
+            print(f"Task completed at iteration {state['iteration']}. Reason: reviewer_approved")
             return "end"
         if use_sentinel and is_deadlock(state):
             print(f"Deadlock detected at iteration {state['iteration']}. Flags: {state['flag']}")
@@ -45,6 +45,10 @@ if __name__ == "__main__":
         "iteration":    0,
         "flag":         [],
         "total_tokens": 0,
+        "task_completed": False,
+        "completion_turn": 0,
+        "completion_reason": "",
+        "terminated_by_detector": False,
     }
  
     result = app.invoke(initial_state)
