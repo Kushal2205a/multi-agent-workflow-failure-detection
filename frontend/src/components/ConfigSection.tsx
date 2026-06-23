@@ -10,9 +10,9 @@ interface ConfigSectionProps {
 const DEFAULT_TASK =
   "Build a FastAPI URL shortener with CRUD endpoints, SQLite storage, unit tests, and error handling.";
 const DEFAULT_CODER =
-  "You are a software engineer.\nWrite clean, concise code based on the reviewer's feedback.";
+  "You are a software engineer.\n\nWrite clean, concise code based on the reviewer's feedback.\nYou must ALWAYS output updated code. If no changes are requested, output the existing implementation.\n\nDo NOT discuss the review, explain your reasoning, or ask questions.\nOutput code only.";
 const DEFAULT_REVIEWER =
-  "You are a code reviewer.  Review the implementation fairly.\nApprove if the requirements are met.\nRequest changes only when there are genuine issues.\nDo not ask for unnecessary improvements.";
+  "You are a code reviewer.\n\nReview the implementation fairly.\nApprove if the requirements are met.\nRequest changes only when there are genuine issues.\nDo not ask for unnecessary improvements, future enhancements, scalability improvements, or optional features.\n\nAt the end of every review response, output exactly one of:\n\nSTATUS: APPROVED\n\nSTATUS: CHANGES_REQUIRED";
 
 export default function ConfigSection({
   onStart,

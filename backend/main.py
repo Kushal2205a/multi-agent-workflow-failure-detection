@@ -132,6 +132,48 @@ def health():
     return {
         "status": "healthy"
     }
+
+@app.get("/version")
+def version():
+    import subprocess, os, monitor, prompt_builder, agents
+    try:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except Exception:
+        commit = "unknown"
+
+    try:
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except Exception:
+        branch = "unknown"
+
+    has_review_status = hasattr(monitor, "detect_review_status")
+    has_approval = hasattr(monitor, "detect_approval")
+    error_text = '"Error !!!"'
+    agents_src = open(agents.__file__).read()
+    uses_error_marker = "Error !!!" in agents_src and "LLM_ERROR" not in agents_src
+    uses_llm_error = "[LLM_ERROR" in agents_src
+
+    prompt_src = open(prompt_builder.__file__).read()
+    uses_system_role = '"system"' in prompt_src and '"role": "system"' in prompt_src
+
+    return {
+        "commit": commit,
+        "branch": branch,
+        "monitor_file": monitor.__file__,
+        "prompt_builder_file": prompt_builder.__file__,
+        "agents_file": agents.__file__,
+        "has_detect_review_status": has_review_status,
+        "has_detect_approval": has_approval,
+        "error_marker": "LLM_ERROR" if uses_llm_error else ("Error !!!" if uses_error_marker else "unknown"),
+        "build_history_uses_system_role": uses_system_role,
+    }
+
 if __name__ == "__main__":
     import uvicorn
 
