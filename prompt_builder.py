@@ -1,14 +1,15 @@
 def build_history(state, system_prompt, speaker):
     """
-    Build chat history with strict alternation.
+    Build chat history with strict role alternation.
 
     Structure:
-      1. First user message = system prompt + original task (always pinned)
-      2. Recent conversation context (last 4 messages, task excluded)
+      1. First message = user role: system prompt + original task (always pinned)
+      2. Recent conversation context (last 4 messages, task excluded),
+         with roles strictly alternating: assistant, user, assistant, user, ...
 
-    System prompt is injected into the first user message (not as a
-    separate system message) because the NVIDIA API with Gemma-2-2b-it
-    does not support the "system" role.
+    The NVIDIA API with Gemma-2-2b-it enforces strict alternation of
+    user/assistant roles. This function guarantees that constraint
+    regardless of which agent is building the history.
     """
     all_messages = state["messages"]
 
@@ -20,8 +21,9 @@ def build_history(state, system_prompt, speaker):
     remaining = all_messages[1:]
     context = remaining[-4:] if len(remaining) > 4 else remaining
 
+    next_role = "assistant"
     for msg in context:
-        role = "assistant" if msg["sender"] == speaker else "user"
-        messages.append({"role": role, "content": msg["content"]})
+        messages.append({"role": next_role, "content": msg["content"]})
+        next_role = "user" if next_role == "assistant" else "assistant"
 
     return messages
