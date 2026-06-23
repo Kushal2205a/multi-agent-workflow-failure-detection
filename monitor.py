@@ -1,11 +1,20 @@
 import re
 
-REVIEW_STATUS_APPROVED = "STATUS: APPROVED"
-REVIEW_STATUS_CHANGES_REQUIRED = "STATUS: CHANGES_REQUIRED"
+STATUS_REGEX = re.compile(
+    r"\*{0,2}_{0,2}`?STATUS\*{0,2}_{0,2}`?:?\s*\*{0,2}_{0,2}`?\s*(APPROVED|CHANGES_REQUIRED)",
+    re.IGNORECASE,
+)
 
 
 def detect_review_status(messages):
     """Check if the latest reviewer message contains a structured review status.
+
+    Handles markdown formatting variants:
+      STATUS: APPROVED
+      **STATUS:** APPROVED
+      **STATUS: APPROVED**
+      __STATUS:__ APPROVED
+      etc.
 
     Returns:
         "approved" if STATUS: APPROVED is present
@@ -16,20 +25,22 @@ def detect_review_status(messages):
     if not reviewer_msgs:
         return None
 
-    last = reviewer_msgs[-1]
-    text = last["content"].strip().upper()
+    raw = reviewer_msgs[-1]["content"]
 
-    if REVIEW_STATUS_APPROVED in text:
-        print("[review_status] APPROVED")
-        return "approved"
-    elif REVIEW_STATUS_CHANGES_REQUIRED in text:
-        print("[review_status] CHANGES_REQUIRED")
+    last_lines = raw.strip().split("\n")[-3:]
+    preview = " | ".join(line.strip() for line in last_lines)
+    print(f"[review_status] RAW: {preview}")
+
+    match = STATUS_REGEX.search(raw)
+    if match:
+        status = match.group(1).upper()
+        print(f"[review_status] PARSED: {status}")
+        if status == "APPROVED":
+            return "approved"
         return "changes_required"
-    else:
-        last_lines = last["content"].strip().split("\n")[-3:]
-        preview = " | ".join(line.strip() for line in last_lines)
-        print(f"[review_status] WARNING: No structured status found (last lines: {preview})")
-        return None
+
+    print("[review_status] WARNING: No structured status found")
+    return None
 
 def contains_keyword(text, keywords):
     for keyword in keywords:
