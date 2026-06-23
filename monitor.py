@@ -184,6 +184,7 @@ def is_deadlock(state):
     if "repeat"     in flag: return True
     if "error_loop" in flag: return True
     if "open_loop"  in flag: return True
+    if "llm_error"  in flag: return True
 
 
     soft_signal = (

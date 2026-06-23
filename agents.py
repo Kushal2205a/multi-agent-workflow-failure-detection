@@ -17,7 +17,7 @@ def make_coder_node(coder_prompt,client):
         if text is None:
             flag = add_flag(flag, "llm_error")
             print("CODER : LLM call failed")
-            text = "Error !!!"
+            text = "[LLM_ERROR: Request failed]"
         else:
             print(f"[CODER | turn {state['iteration']}] {text[:120]}{'...' if len(text) > 120 else ''}")
  
@@ -59,7 +59,7 @@ def make_reviewer_node(reviewer_prompt,client):
         if text is None:
             flag = add_flag(flag, "llm_error")
             print("REVIEWER : LLM call failed")
-            text = "Error !!!"
+            text = "[LLM_ERROR: Request failed]"
         else:
             print(f"[REVIEWER | turn {state['iteration']}] {text[:120]}{'...' if len(text) > 120 else ''}")
  
