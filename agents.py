@@ -1,7 +1,7 @@
 import time 
 from state import AgentState
 
-from monitor import add_flag,update_flag
+from monitor import add_flag,update_flag, detect_approval
 from llm_client import request_response 
 
 
@@ -11,7 +11,7 @@ from prompt_builder import build_history
 def make_coder_node(coder_prompt,client):
     def coder_node(state: AgentState):
         history = build_history(state, coder_prompt, "coder")
-        text, latency, tokens, error_flag = request_response(history,client)
+        text, latency, tokens, comp_tokens, error_flag = request_response(history,client)
         flag = state["flag"][:]
  
         if text is None:
@@ -27,6 +27,7 @@ def make_coder_node(coder_prompt,client):
             "latency":   latency,
             "timestamp": time.time(),
             "tokens":    tokens,
+            "completion_tokens": comp_tokens,
             "error":     error_flag,
         }
  
@@ -40,6 +41,10 @@ def make_coder_node(coder_prompt,client):
             "iteration":    state["iteration"] + 1,
             "flag":         flag,
             "total_tokens": total_tokens,
+            "task_completed": state.get("task_completed", False),
+            "completion_turn": state.get("completion_turn", 0),
+            "completion_reason": state.get("completion_reason", ""),
+            "terminated_by_detector": state.get("terminated_by_detector", False),
         }
     time.sleep(1)
     return coder_node
@@ -48,7 +53,7 @@ def make_coder_node(coder_prompt,client):
 def make_reviewer_node(reviewer_prompt,client):
     def reviewer_node(state: AgentState):
         history = build_history(state, reviewer_prompt, "reviewer")
-        text, latency, tokens, error_flag = request_response(history,client)
+        text, latency, tokens, comp_tokens, error_flag = request_response(history,client)
         flag = state["flag"][:]
  
         if text is None:
@@ -64,19 +69,33 @@ def make_reviewer_node(reviewer_prompt,client):
             "latency":   latency,
             "timestamp": time.time(),
             "tokens":    tokens,
+            "completion_tokens": comp_tokens,
             "error":     error_flag,
         }
  
         updated_messages = state["messages"] + [new_message]
         flag = update_flag(flag, updated_messages)
         total_tokens = state.get("total_tokens", 0) + (tokens or 0)
- 
+
+        task_completed = detect_approval(updated_messages)
+        if task_completed and not state.get("task_completed"):
+            completion_turn = state["iteration"] + 1
+            completion_reason = "reviewer_approved"
+        else:
+            completion_turn = state.get("completion_turn", 0)
+            completion_reason = state.get("completion_reason", "")
+        terminated_by_detector = state.get("terminated_by_detector", False)
+
         return {
             "messages":     [new_message],
             "sender":       "reviewer",
             "iteration":    state["iteration"] + 1,
             "flag":         flag,
             "total_tokens": total_tokens,
+            "task_completed": task_completed or state.get("task_completed", False),
+            "completion_turn": completion_turn,
+            "completion_reason": completion_reason,
+            "terminated_by_detector": terminated_by_detector,
         }
         
     time.sleep(1)

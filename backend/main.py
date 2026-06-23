@@ -59,6 +59,10 @@ async def run_workflow(
             "turns": rows[-1]["iteration"] if rows else 0,
             "deadlock": any(r.get("deadlock") for r in rows) if workflow_id == "protected" else False,
             "flags": rows[-1]["flags"] if rows else [],
+            "task_completed": rows[-1].get("task_completed", False) if rows else False,
+            "completion_turn": rows[-1].get("completion_turn", 0) if rows else 0,
+            "completion_reason": rows[-1].get("completion_reason", "max_iterations") if rows else "",
+            "terminated_by_detector": any(r.get("deadlock") for r in rows) if workflow_id == "protected" else False,
         }
     except Exception as e:
         print(f"[{workflow_id}] Error: {type(e).__name__}: {e}")
@@ -69,6 +73,10 @@ async def run_workflow(
             "deadlock": any(r.get("deadlock") for r in rows) if workflow_id == "protected" and rows else False,
             "flags": last["flags"] if last else [],
             "error": str(e),
+            "task_completed": last.get("task_completed", False) if last else False,
+            "completion_turn": last.get("completion_turn", 0) if last else 0,
+            "completion_reason": last.get("completion_reason", "error") if last else "error",
+            "terminated_by_detector": any(r.get("deadlock") for r in rows) if workflow_id == "protected" and rows else False,
         }
 
     try:

@@ -18,10 +18,14 @@ def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentin
             "tokens":    0,
             "error":     False,
         }],
-        "sender":       "user",
-        "iteration":    0,
-        "flag":         [],
-        "total_tokens": 0,
+        "sender":              "user",
+        "iteration":           0,
+        "flag":                [],
+        "total_tokens":        0,
+        "task_completed":      False,
+        "completion_turn":     0,
+        "completion_reason":   "",
+        "terminated_by_detector": False,
     }
 
     turn       = 0
@@ -54,4 +58,8 @@ def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentin
                 "iteration":    iteration,
                 "total_tokens": total_tokens,
                 "deadlock":     deadlock,
+                "task_completed": node_output.get("task_completed", False),
+                "completion_turn": node_output.get("completion_turn", 0),
+                "completion_reason": node_output.get("completion_reason", ""),
+                "terminated_by_detector": deadlock,
             }

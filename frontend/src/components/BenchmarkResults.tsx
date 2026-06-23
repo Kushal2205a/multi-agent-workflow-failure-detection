@@ -27,6 +27,10 @@ function getBestSummary(
     deadlock: false,
     flags: [],
     error: "Connection closed before completion",
+    task_completed: last?.task_completed ?? false,
+    completion_turn: last?.completion_turn ?? 0,
+    completion_reason: last?.completion_reason ?? "",
+    terminated_by_detector: last?.terminated_by_detector ?? false,
   };
 }
 

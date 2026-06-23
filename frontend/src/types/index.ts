@@ -4,6 +4,7 @@ export interface MessageData {
   latency: number;
   timestamp: number;
   tokens: number;
+  completion_tokens: number;
   error: boolean;
   turn?: number;
 }
@@ -15,6 +16,10 @@ export interface StreamEvent {
   iteration: number;
   total_tokens: number;
   deadlock: boolean;
+  task_completed: boolean;
+  completion_turn: number;
+  completion_reason: string;
+  terminated_by_detector: boolean;
 }
 
 export interface WorkflowSummary {
@@ -23,6 +28,10 @@ export interface WorkflowSummary {
   deadlock: boolean;
   flags: string[];
   error?: string;
+  task_completed: boolean;
+  completion_turn: number;
+  completion_reason: string;
+  terminated_by_detector: boolean;
 }
 
 export interface WorkflowState {

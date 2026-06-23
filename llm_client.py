@@ -47,12 +47,13 @@ def request_response(history,client):
         text = response.choices[0].message.content
 
         usage = response.usage
-        tokens = usage.total_tokens if usage else 0
+        total_tokens = usage.total_tokens if usage else 0
+        completion_tokens = usage.completion_tokens if usage else int(len(text) // 4)
 
         latency = time.time() - start
 
-        return text, latency, tokens, False
+        return text, latency, total_tokens, completion_tokens, False
 
     except Exception as e:
         print(f"LLM Request failed: {type(e).__name__}: {e}")
-        return None, None, 0, True     
+        return None, None, 0, 0, True

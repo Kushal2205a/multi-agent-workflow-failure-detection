@@ -104,6 +104,10 @@ export function useBenchmark() {
                         deadlock: false,
                         flags: prev.rows[prev.rows.length - 1].flags,
                         error: "Connection closed before completion",
+                        task_completed: prev.rows[prev.rows.length - 1].task_completed,
+                        completion_turn: prev.rows[prev.rows.length - 1].completion_turn,
+                        completion_reason: prev.rows[prev.rows.length - 1].completion_reason,
+                        terminated_by_detector: false,
                       }
                     : {
                         total_tokens: 0,
@@ -111,6 +115,10 @@ export function useBenchmark() {
                         deadlock: false,
                         flags: [],
                         error: "Connection closed before completion",
+                        task_completed: false,
+                        completion_turn: 0,
+                        completion_reason: "",
+                        terminated_by_detector: false,
                       },
                 }
               : prev,
@@ -128,6 +136,10 @@ export function useBenchmark() {
                         deadlock: prev.rows.some((r) => r.deadlock),
                         flags: prev.rows[prev.rows.length - 1].flags,
                         error: "Connection closed before completion",
+                        task_completed: prev.rows[prev.rows.length - 1].task_completed,
+                        completion_turn: prev.rows[prev.rows.length - 1].completion_turn,
+                        completion_reason: prev.rows[prev.rows.length - 1].completion_reason,
+                        terminated_by_detector: prev.rows.some((r) => r.terminated_by_detector),
                       }
                     : {
                         total_tokens: 0,
@@ -135,6 +147,10 @@ export function useBenchmark() {
                         deadlock: false,
                         flags: [],
                         error: "Connection closed before completion",
+                        task_completed: false,
+                        completion_turn: 0,
+                        completion_reason: "",
+                        terminated_by_detector: false,
                       },
                 }
               : prev,

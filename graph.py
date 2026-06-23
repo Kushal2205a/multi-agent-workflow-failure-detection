@@ -14,6 +14,9 @@ def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bo
     reviewer_node = make_reviewer_node(reviewer_prompt,client)
  
     def should_continue(state: AgentState):
+        if state.get("task_completed"):
+            print(f"Task completed at iteration {state['iteration']}. Reason: {state.get('completion_reason', 'unknown')}")
+            return "end"
         if use_sentinel and is_deadlock(state):
             print(f"Deadlock detected at iteration {state['iteration']}. Flags: {state['flag']}")
             return "end"

@@ -35,6 +35,16 @@ export function generateCSV(
     deadlock: false,
     flags: [],
     error: "Incomplete",
+    task_completed: baseline.rows.length > 0
+      ? baseline.rows[baseline.rows.length - 1].task_completed
+      : false,
+    completion_turn: baseline.rows.length > 0
+      ? baseline.rows[baseline.rows.length - 1].completion_turn
+      : 0,
+    completion_reason: baseline.rows.length > 0
+      ? baseline.rows[baseline.rows.length - 1].completion_reason
+      : "",
+    terminated_by_detector: false,
   };
 
   const ps = protectedState.summary ?? {
@@ -49,6 +59,16 @@ export function generateCSV(
       ? protectedState.rows[protectedState.rows.length - 1].flags
       : [],
     error: "Incomplete",
+    task_completed: protectedState.rows.length > 0
+      ? protectedState.rows[protectedState.rows.length - 1].task_completed
+      : false,
+    completion_turn: protectedState.rows.length > 0
+      ? protectedState.rows[protectedState.rows.length - 1].completion_turn
+      : 0,
+    completion_reason: protectedState.rows.length > 0
+      ? protectedState.rows[protectedState.rows.length - 1].completion_reason
+      : "",
+    terminated_by_detector: protectedState.rows.some((r) => r.terminated_by_detector),
   };
 
   const tokensSaved = bs.total_tokens - ps.total_tokens;
@@ -77,10 +97,17 @@ export function generateCSV(
   lines.push(`Turns Saved,${turnsSaved}`);
   lines.push(`Detector Triggered,${detectorTriggered}`);
   lines.push(`Trigger Reason,${triggerReason}`);
+  lines.push(`Task Completed,${bs.task_completed ? "Yes" : "No"}`);
+  lines.push(`Baseline Completion Turn,${bs.completion_turn}`);
+  lines.push(`Protected Completion Turn,${ps.completion_turn}`);
+  lines.push(`Baseline Completion Reason,${bs.completion_reason}`);
+  lines.push(`Protected Completion Reason,${ps.completion_reason}`);
+  lines.push(`Baseline Terminated By Detector,${bs.terminated_by_detector ? "Yes" : "No"}`);
+  lines.push(`Protected Terminated By Detector,${ps.terminated_by_detector ? "Yes" : "No"}`);
   lines.push("");
 
   lines.push(
-    "run_type,turn,agent,tokens,latency_seconds,flags,message_preview",
+    "run_type,turn,agent,tokens,completion_tokens,latency_seconds,flags,message_preview",
   );
 
   for (const event of baseline.rows) {
@@ -88,11 +115,12 @@ export function generateCSV(
     const turn = message.turn ?? event.iteration;
     const agent = message.sender;
     const tokens = message.tokens;
+    const compTokens = message.completion_tokens ?? "";
     const latency = message.latency != null ? message.latency.toFixed(1) : "";
     const flagsStr = flags.length > 0 ? flags.join("; ") : "";
     const preview = sanitizeCSVField(message.content.slice(0, 200));
     lines.push(
-      `baseline,${turn},${agent},${tokens},${latency},${flagsStr},"${preview}"`,
+      `baseline,${turn},${agent},${tokens},${compTokens},${latency},${flagsStr},"${preview}"`,
     );
   }
 
@@ -101,11 +129,12 @@ export function generateCSV(
     const turn = message.turn ?? event.iteration;
     const agent = message.sender;
     const tokens = message.tokens;
+    const compTokens = message.completion_tokens ?? "";
     const latency = message.latency != null ? message.latency.toFixed(1) : "";
     const flagsStr = flags.length > 0 ? flags.join("; ") : "";
     const preview = sanitizeCSVField(message.content.slice(0, 200));
     lines.push(
-      `protected,${turn},${agent},${tokens},${latency},${flagsStr},"${preview}"`,
+      `protected,${turn},${agent},${tokens},${compTokens},${latency},${flagsStr},"${preview}"`,
     );
   }
 

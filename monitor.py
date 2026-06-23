@@ -1,5 +1,25 @@
 import re
 
+APPROVAL_KEYWORDS = [
+    "approved",
+    "approve",
+    "accepted",
+    "satisfies the requirements",
+    "no further changes required",
+    "ready to merge",
+]
+
+def detect_approval(messages):
+    reviewer_msgs = [m for m in messages if m["sender"] == "reviewer"]
+    if not reviewer_msgs:
+        return False
+    text = reviewer_msgs[-1]["content"].lower()
+    for kw in APPROVAL_KEYWORDS:
+        if kw in text:
+            print(f"Approval detected: \"{kw}\" in reviewer message")
+            return True
+    return False
+
 def contains_keyword(text, keywords):
     for keyword in keywords:
         if re.search(r'\b' + re.escape(keyword) + r'\b', text):
@@ -97,19 +117,39 @@ def detect_rejection_loop(messages):
     
     return contains_keyword(last, rejection_keywords) and contains_keyword(prev, rejection_keywords)
 
+def _message_tokens(msg):
+    """Get per-message token count, falling back to content length estimate."""
+    ct = msg.get("completion_tokens")
+    if ct and ct > 0:
+        return ct
+    content = msg.get("content", "")
+    if content:
+        return len(content) // 4
+    return msg.get("tokens", 0) or 0
+
 def detect_escalation(messages):
     if len(messages) < 2:
         return False
-    
+
     reviewer_msgs = [m for m in messages if m["sender"] == "reviewer"]
-    
-    if len(reviewer_msgs) < 2:
+
+    if len(reviewer_msgs) < 3:
         return False
 
-    last = reviewer_msgs[-1].get("tokens", 0)
-    prev = reviewer_msgs[-2].get("tokens", 1)
+    tokens = [_message_tokens(m) for m in reviewer_msgs]
+    n = len(tokens)
 
-    return last > prev * 1.3
+    prev_avg = sum(tokens[:-1]) / (n - 1)
+
+    if prev_avg <= 0 or tokens[-1] <= prev_avg * 1.3:
+        return False
+
+    growth_count = sum(
+        1 for i in range(-2, 0)
+        if tokens[i] > tokens[i - 1] * 1.1
+    )
+
+    return growth_count >= 2
 
   
 def detect_error_loop(messages):
