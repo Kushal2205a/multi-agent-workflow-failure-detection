@@ -12,12 +12,16 @@ APPROVAL_KEYWORDS = [
 def detect_approval(messages):
     reviewer_msgs = [m for m in messages if m["sender"] == "reviewer"]
     if not reviewer_msgs:
+        print(f"[detect_approval] No reviewer messages found (total messages: {len(messages)})")
         return False
-    text = reviewer_msgs[-1]["content"].lower()
+    last = reviewer_msgs[-1]
+    text = last["content"].lower()
+    print(f"[detect_approval] Checking last reviewer msg (turn ~{last.get('turn', '?')}): {text[:150]}")
     for kw in APPROVAL_KEYWORDS:
         if kw in text:
             print(f"Approval detected: \"{kw}\" in reviewer message")
             return True
+    print(f"[detect_approval] No approval keyword matched. Keywords: {APPROVAL_KEYWORDS}")
     return False
 
 def contains_keyword(text, keywords):
@@ -187,6 +191,13 @@ def is_deadlock(state):
     if "escalation" in flag and itr >= 3:
         print(f"🔴 DEADLOCK: escalation at iteration {itr}, flags={flag}")
         return True
+
+    if "latency" in flag and not soft_signal:
+        print(f"[deadlock-decision] latency detected at iteration {itr} but no soft signal:")
+        print(f"  flags={flag}")
+        print(f"  repeat={'repeat' in flag}, error_loop={'error_loop' in flag}, open_loop={'open_loop' in flag}")
+        print(f"  stagnation={'stagnation' in flag}, rejection_loop={'rejection_loop' in flag}, weak_progress={'weak_progress' in flag}")
+        print(f"  Result: latency alone insufficient for termination")
 
     return False
 

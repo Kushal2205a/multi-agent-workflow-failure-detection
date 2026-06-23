@@ -78,9 +78,11 @@ def make_reviewer_node(reviewer_prompt,client):
         total_tokens = state.get("total_tokens", 0) + (tokens or 0)
 
         task_completed = detect_approval(updated_messages)
+        print(f"[reviewer_node] detect_approval returned: {task_completed} (messages count: {len(updated_messages)})")
         if task_completed and not state.get("task_completed"):
             completion_turn = state["iteration"] + 1
             completion_reason = "reviewer_approved"
+            print(f"[reviewer_node] Task completed at turn {completion_turn}")
         else:
             completion_turn = state.get("completion_turn", 0)
             completion_reason = state.get("completion_reason", "")

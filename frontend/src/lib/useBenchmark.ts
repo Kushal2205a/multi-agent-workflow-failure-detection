@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import type { StreamEvent, WorkflowState, WorkflowSummary } from "@/types";
+import type { StreamEvent, WorkflowState, WorkflowSummary, LogEntry } from "@/types";
 
 const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ??
@@ -17,11 +17,13 @@ export function useBenchmark() {
   const [baseline, setBaseline] = useState<WorkflowState>(INITIAL_STATE);
   const [protected_, setProtected] = useState<WorkflowState>(INITIAL_STATE);
   const [running, setRunning] = useState(false);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [task, setTask] = useState("");
   const [coderPrompt, setCoderPrompt] = useState("");
   const [reviewerPrompt, setReviewerPrompt] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
   const completedRef = useRef(0);
+  const logIdRef = useRef(0);
 
   const start = useCallback(
     (taskStr: string, coderPromptStr: string, reviewerPromptStr: string) => {
@@ -30,6 +32,8 @@ export function useBenchmark() {
       setBaseline({ ...INITIAL_STATE, running: true });
       setProtected({ ...INITIAL_STATE, running: true });
       setRunning(true);
+      setLogs([]);
+      logIdRef.current = 0;
       setTask(taskStr);
       setCoderPrompt(coderPromptStr);
       setReviewerPrompt(reviewerPromptStr);
@@ -80,6 +84,15 @@ export function useBenchmark() {
           if (completedRef.current >= 2) {
             setRunning(false);
           }
+        } else if (msg.type === "log") {
+          const lines = (msg.data as string).split("\n").filter((l) => l.trim());
+          const entries: LogEntry[] = lines.map((line) => ({
+            id: ++logIdRef.current,
+            timestamp: new Date().toISOString(),
+            workflow: msg.workflow as "baseline" | "protected",
+            message: line,
+          }));
+          setLogs((prev) => [...prev, ...entries]);
         } else if (msg.type === "error") {
           console.error("Benchmark error:", msg.message);
         }
@@ -168,5 +181,6 @@ export function useBenchmark() {
     task,
     coderPrompt,
     reviewerPrompt,
+    logs,
   };
 }

@@ -5,6 +5,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import log_utils
+
+log_utils.install()
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -51,6 +55,9 @@ async def run_workflow(
                 break
             rows.append(result)
             await websocket.send_json({"type": "event", "workflow": workflow_id, "data": result})
+            logs = log_utils.drain()
+            if logs.strip():
+                await websocket.send_json({"type": "log", "workflow": workflow_id, "data": logs.rstrip("\n")})
             if result["deadlock"]:
                 break
 
@@ -82,6 +89,9 @@ async def run_workflow(
     try:
         if summary is not None:
             await websocket.send_json({"type": "complete", "workflow": workflow_id, "data": summary})
+            logs = log_utils.drain()
+            if logs.strip():
+                await websocket.send_json({"type": "log", "workflow": workflow_id, "data": logs.rstrip("\n")})
     except Exception:
         pass
 

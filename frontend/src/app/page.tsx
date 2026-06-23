@@ -4,6 +4,7 @@ import { useBenchmark } from "@/lib/useBenchmark";
 import ConfigSection from "@/components/ConfigSection";
 import WorkflowPanel from "@/components/WorkflowPanel";
 import BenchmarkResults from "@/components/BenchmarkResults";
+import LogPanel from "@/components/LogPanel";
 
 export default function Home() {
   const {
@@ -14,6 +15,7 @@ export default function Home() {
     task,
     coderPrompt,
     reviewerPrompt,
+    logs,
   } = useBenchmark();
 
   return (
@@ -34,6 +36,8 @@ export default function Home() {
         <WorkflowPanel id="baseline" state={baseline} />
         <WorkflowPanel id="protected" state={protectedState} />
       </div>
+
+      {(logs.length > 0 || running) && <LogPanel logs={logs} />}
 
       <BenchmarkResults
         baseline={baseline}

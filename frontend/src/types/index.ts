@@ -34,6 +34,13 @@ export interface WorkflowSummary {
   terminated_by_detector: boolean;
 }
 
+export interface LogEntry {
+  id: number;
+  timestamp: string;
+  workflow: "baseline" | "protected";
+  message: string;
+}
+
 export interface WorkflowState {
   rows: StreamEvent[];
   summary: WorkflowSummary | null;

@@ -51,6 +51,10 @@ def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentin
                 "iteration": iteration,
             })
 
+            tc = node_output.get("task_completed", False)
+            ct = node_output.get("completion_turn", 0)
+            print(f"[runner] turn={turn} node={node_name} task_completed={tc} completion_turn={ct} deadlock={deadlock}")
+
             yield {
                 "message":      msg,
                 "flags":        current_flags,
@@ -58,8 +62,8 @@ def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentin
                 "iteration":    iteration,
                 "total_tokens": total_tokens,
                 "deadlock":     deadlock,
-                "task_completed": node_output.get("task_completed", False),
-                "completion_turn": node_output.get("completion_turn", 0),
+                "task_completed": tc,
+                "completion_turn": ct,
                 "completion_reason": node_output.get("completion_reason", ""),
                 "terminated_by_detector": deadlock,
             }
