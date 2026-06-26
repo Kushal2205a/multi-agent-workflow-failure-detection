@@ -1,4 +1,15 @@
-def build_history(state, system_prompt):
+def _runtime_guidance_section(guidance):
+    if not guidance or not guidance.get("enabled"):
+        return ""
+
+    instruction = guidance.get("instruction", "").strip()
+    if not instruction:
+        return ""
+
+    return f"\n\nRuntime Guidance\n{instruction}"
+
+
+def build_history(state, system_prompt, runtime_guidance=None):
     """
     Build chat history for the coder node with strict role alternation.
 
@@ -15,8 +26,10 @@ def build_history(state, system_prompt):
 
     messages = []
 
+    system_with_guidance = system_prompt + _runtime_guidance_section(runtime_guidance)
+
     if all_messages:
-        messages.append({"role": "user", "content": system_prompt + "\n\n" + all_messages[0]["content"]})
+        messages.append({"role": "user", "content": system_with_guidance + "\n\n" + all_messages[0]["content"]})
 
     remaining = all_messages[1:]
     context = remaining[-4:] if len(remaining) > 4 else remaining
@@ -29,7 +42,7 @@ def build_history(state, system_prompt):
     return messages
 
 
-def build_reviewer_request(reviewer_prompt, task, latest_coder_output):
+def build_reviewer_request(reviewer_prompt, task, latest_coder_output, runtime_guidance=None):
     """
     Build a stateless reviewer request as a single user message.
 
@@ -46,8 +59,10 @@ def build_reviewer_request(reviewer_prompt, task, latest_coder_output):
 
     Returns: list with a single {"role": "user", "content": ...} message.
     """
+    reviewer_with_guidance = reviewer_prompt + _runtime_guidance_section(runtime_guidance)
+
     content = (
-        f"{reviewer_prompt}\n\n"
+        f"{reviewer_with_guidance}\n\n"
         f"Original task:\n{task}\n\n"
         f"Implementation to review:\n{latest_coder_output}"
     )
