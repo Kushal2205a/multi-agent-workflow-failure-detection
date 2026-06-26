@@ -42,10 +42,11 @@ async def run_workflow(
     coder_prompt: str,
     reviewer_prompt: str,
     use_sentinel: bool,
+    adaptive_interventions: bool = True,
 ):
     summary = None
     try:
-        gen = stream_single(task, coder_prompt, reviewer_prompt, use_sentinel)
+        gen = stream_single(task, coder_prompt, reviewer_prompt, use_sentinel, adaptive_interventions)
         loop = asyncio.get_running_loop()
         rows = []
 
@@ -64,12 +65,15 @@ async def run_workflow(
         summary = {
             "total_tokens": rows[-1]["total_tokens"] if rows else 0,
             "turns": rows[-1]["iteration"] if rows else 0,
-            "deadlock": any(r.get("deadlock") for r in rows) if workflow_id == "protected" else False,
+            "deadlock": any(r.get("deadlock") for r in rows) if workflow_id != "baseline" else False,
             "flags": rows[-1]["flags"] if rows else [],
             "task_completed": rows[-1].get("task_completed", False) if rows else False,
             "completion_turn": rows[-1].get("completion_turn", 0) if rows else 0,
             "completion_reason": rows[-1].get("completion_reason", "max_iterations") if rows else "",
-            "terminated_by_detector": any(r.get("deadlock") for r in rows) if workflow_id == "protected" else False,
+            "terminated_by_detector": any(r.get("deadlock") for r in rows) if workflow_id != "baseline" else False,
+            "interventions": rows[-1].get("interventions", []) if rows else [],
+            "interventions_applied": sum(1 for i in (rows[-1].get("interventions", []) if rows else []) if i.get("outcome") != "skipped"),
+            "successful_recoveries": sum(1 for i in (rows[-1].get("interventions", []) if rows else []) if i.get("outcome") == "recovered"),
         }
     except Exception as e:
         print(f"[{workflow_id}] Error: {type(e).__name__}: {e}")
@@ -77,13 +81,16 @@ async def run_workflow(
         summary = {
             "total_tokens": last["total_tokens"] if last else 0,
             "turns": last["iteration"] if last else 0,
-            "deadlock": any(r.get("deadlock") for r in rows) if workflow_id == "protected" and rows else False,
+            "deadlock": any(r.get("deadlock") for r in rows) if workflow_id != "baseline" and rows else False,
             "flags": last["flags"] if last else [],
             "error": str(e),
             "task_completed": last.get("task_completed", False) if last else False,
             "completion_turn": last.get("completion_turn", 0) if last else 0,
             "completion_reason": last.get("completion_reason", "error") if last else "error",
-            "terminated_by_detector": any(r.get("deadlock") for r in rows) if workflow_id == "protected" and rows else False,
+            "terminated_by_detector": any(r.get("deadlock") for r in rows) if workflow_id != "baseline" and rows else False,
+            "interventions": last.get("interventions", []) if last else [],
+            "interventions_applied": sum(1 for i in (last.get("interventions", []) if last else []) if i.get("outcome") != "skipped"),
+            "successful_recoveries": sum(1 for i in (last.get("interventions", []) if last else []) if i.get("outcome") == "recovered"),
         }
 
     try:
@@ -106,8 +113,9 @@ async def websocket_endpoint(websocket: WebSocket):
             coder = message.get("coder_prompt", CODER)
             reviewer = message.get("reviewer_prompt", REVIEWER)
             results = await asyncio.gather(
-                run_workflow(websocket, "baseline", task, coder, reviewer, False),
-                run_workflow(websocket, "protected", task, coder, reviewer, True),
+                run_workflow(websocket, "baseline", task, coder, reviewer, False, False),
+                run_workflow(websocket, "monitor_only", task, coder, reviewer, True, False),
+                run_workflow(websocket, "protected", task, coder, reviewer, True, True),
                 return_exceptions=True,
             )
             for result in results:
