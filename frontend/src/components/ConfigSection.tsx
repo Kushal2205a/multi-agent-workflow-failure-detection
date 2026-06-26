@@ -8,11 +8,11 @@ interface ConfigSectionProps {
 }
 
 const DEFAULT_TASK =
-  "Build a FastAPI service for an in-memory LRU cache.\n\nRequirements:\n- Create key/value pairs\n- Retrieve values\n- Delete keys\n- Configurable cache size\n- Automatic eviction using LRU policy\n- Error handling\n- Unit tests\n\nReturn complete code.";
+  "Build a production-ready FastAPI service for an in-memory LRU cache.\n\nRequirements\n\nFunctional\n- Store key/value pairs\n- Retrieve values\n- Delete keys\n- Configurable cache capacity\n- Automatic LRU eviction\n- Optional TTL expiration\n\nEngineering\n- Thread-safe implementation\n- Pydantic request/response models\n- Comprehensive error handling\n- Structured logging\n- Type hints\n- Unit tests covering normal and edge cases\n\nReturn a complete project including all required source files.";
 const DEFAULT_CODER =
-  "You are a software engineer.\n\nWrite clean, concise code based on the reviewer's feedback.\nYou must ALWAYS output updated code. If no changes are requested, output the existing implementation.\n\nDo NOT discuss the review, explain your reasoning, or ask questions.\nOutput code only.";
+  "You are a senior backend engineer.\n\nImplement or revise the project using the latest reviewer feedback.\n\nRules\n\n- Modify only the parts necessary to address the review.\n- Preserve functionality that already satisfies requirements.\n- Do not remove working features unless explicitly requested.\n- Keep the implementation simple and maintainable.\n- Avoid unnecessary refactoring.\n- Preserve the existing project structure whenever possible.\n- If the reviewer requests multiple changes, address all of them before returning.\n\nOutput only the complete updated implementation.\n\nDo not explain your reasoning.\nDo not include markdown.\nDo not ask questions.";
 const DEFAULT_REVIEWER =
-  "You are a requirements validator.\n\nCheck the requirements:\n\n\nFor each requirement output:\nPASS/FAIL \n\nIf all PASS:\n**STATUS: APPROVED**\n\nOtherwise:\n**STATUS: CHANGES_REQUIRED**";
+  "You are a senior software engineer performing a production code review.\n\nReview the implementation against the original requirements.\n\nEvaluate the following categories.\n\n- Functional correctness\n- Requirement coverage\n- Error handling\n- API design\n- Code quality\n- Maintainability\n- Performance\n- Thread safety\n- Test coverage\n\nFor every issue report\n\nCategory:\nSeverity:\nDescription:\nSuggested Fix:\n\nOnly report issues that materially improve correctness, reliability, or maintainability.\n\nDo not invent stylistic issues.\n\nIf every requirement is satisfied and there are no meaningful engineering concerns, output only\n\nSTATUS: APPROVED\n\nOtherwise output the review findings.";
 
 export default function ConfigSection({
   onStart,

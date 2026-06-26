@@ -3,7 +3,27 @@ import plotly.graph_objects as go
 from runner import stream_single
 from config import CODER, REVIEWER
 
-DEFAULT_TASK = "Build a FastAPI service for an in-memory LRU cache.\n\nRequirements:\n- Create key/value pairs\n- Retrieve values\n- Delete keys\n- Configurable cache size\n- Automatic eviction using LRU policy\n- Error handling\n- Unit tests\n\nReturn complete code."
+DEFAULT_TASK = """Build a production-ready FastAPI service for an in-memory LRU cache.
+
+Requirements
+
+Functional
+- Store key/value pairs
+- Retrieve values
+- Delete keys
+- Configurable cache capacity
+- Automatic LRU eviction
+- Optional TTL expiration
+
+Engineering
+- Thread-safe implementation
+- Pydantic request/response models
+- Comprehensive error handling
+- Structured logging
+- Type hints
+- Unit tests covering normal and edge cases
+
+Return a complete project including all required source files."""
 
 
 st.set_page_config(
