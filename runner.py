@@ -1,13 +1,20 @@
 from graph import build_graph
 from monitor import is_deadlock
+from policy_engine import should_terminate_after_interventions
 from config import MAX_TURNS
 from llm_client import baseline_client, protected_client
 
-def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentinel: bool = True):
+def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentinel: bool = True, adaptive_interventions: bool = True):
     
     client = protected_client if use_sentinel else baseline_client
     
-    app = build_graph(coder_prompt, reviewer_prompt,client = client, use_sentinel=use_sentinel)
+    app = build_graph(
+        coder_prompt,
+        reviewer_prompt,
+        client=client,
+        use_sentinel=use_sentinel,
+        adaptive_interventions=adaptive_interventions,
+    )
 
     initial_state = {
         "messages": [{
@@ -26,10 +33,14 @@ def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentin
         "completion_turn":     0,
         "completion_reason":   "",
         "terminated_by_detector": False,
+        "interventions":       [],
+        "active_policy":       None,
+        "adaptive_interventions": adaptive_interventions,
     }
 
     turn       = 0
     prev_flags = []
+    prev_intervention_count = 0
 
     for event in app.stream(initial_state):
         for node_name, node_output in event.items():
@@ -46,10 +57,21 @@ def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentin
 
             iteration    = node_output.get("iteration", 0)
             total_tokens = node_output.get("total_tokens", 0)
-            deadlock     = use_sentinel and is_deadlock({
-                "flag":      current_flags,
+            interventions = node_output.get("interventions", [])
+            active_policy = node_output.get("active_policy")
+            new_interventions = interventions[prev_intervention_count:]
+            prev_intervention_count = len(interventions)
+            deadlock_state = {
+                "flag": current_flags,
                 "iteration": iteration,
-            })
+                "interventions": interventions,
+                "active_policy": active_policy,
+            }
+            if use_sentinel and is_deadlock(deadlock_state):
+                deadlock = (not adaptive_interventions) or should_terminate_after_interventions(deadlock_state)
+            else:
+                deadlock = False
+            latest_intervention = interventions[-1] if interventions else None
 
             tc = node_output.get("task_completed", False)
             ct = node_output.get("completion_turn", 0)
@@ -66,4 +88,8 @@ def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentin
                 "completion_turn": ct,
                 "completion_reason": node_output.get("completion_reason", ""),
                 "terminated_by_detector": deadlock,
+                "interventions": interventions,
+                "active_policy": active_policy,
+                "latest_intervention": latest_intervention,
+                "new_interventions": new_interventions,
             }
