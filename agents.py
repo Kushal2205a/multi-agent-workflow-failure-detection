@@ -6,11 +6,26 @@ from llm_client import request_response
 
 
 from prompt_builder import build_history, build_reviewer_request
+from policy_engine import RuntimeGuidance, build_runtime_guidance, evaluate_recovery, record_intervention
 
 
 def make_coder_node(coder_prompt,client):
     def coder_node(state: AgentState):
-        history = build_history(state, coder_prompt)
+        guidance = (
+            build_runtime_guidance(state, target_agent="coder")
+            if state.get("adaptive_interventions", True)
+            else RuntimeGuidance(enabled=False)
+        )
+        intervention_state = record_intervention(state, guidance)
+        active_policy = intervention_state["active_policy"]
+        interventions = intervention_state["interventions"]
+        guidance_dict = guidance.to_dict() if guidance.enabled else None
+
+        if guidance.enabled:
+            print(f"[policy_engine] Applying {guidance.policy} to coder at iteration {state['iteration']}")
+
+        state_for_prompt = {**state, "interventions": interventions, "active_policy": active_policy}
+        history = build_history(state_for_prompt, coder_prompt, guidance_dict)
         text, latency, tokens, comp_tokens, error_flag = request_response(history,client)
         flag = state["flag"][:]
  
@@ -35,6 +50,22 @@ def make_coder_node(coder_prompt,client):
         flag = update_flag(flag, updated_messages)
         total_tokens = state.get("total_tokens", 0) + (tokens or 0)
  
+        partial_state = {
+            **state,
+            "messages": updated_messages,
+            "sender": "coder",
+            "iteration": state["iteration"] + 1,
+            "flag": flag,
+            "total_tokens": total_tokens,
+            "interventions": interventions,
+            "active_policy": active_policy,
+        }
+        recovery = evaluate_recovery(
+            {**state, "interventions": interventions, "active_policy": active_policy},
+            partial_state,
+            "coder",
+        )
+
         return {
             "messages":     [new_message],
             "sender":       "coder",
@@ -45,6 +76,9 @@ def make_coder_node(coder_prompt,client):
             "completion_turn": state.get("completion_turn", 0),
             "completion_reason": state.get("completion_reason", ""),
             "terminated_by_detector": state.get("terminated_by_detector", False),
+            "interventions": recovery["interventions"],
+            "active_policy": recovery["active_policy"],
+            "adaptive_interventions": state.get("adaptive_interventions", True),
         }
     time.sleep(1)
     return coder_node
@@ -55,7 +89,20 @@ def make_reviewer_node(reviewer_prompt,client):
         task = state["messages"][0]["content"]
         coder_msgs = [m for m in state["messages"] if m["sender"] == "coder"]
         latest_coder = coder_msgs[-1]["content"] if coder_msgs else ""
-        history = build_reviewer_request(reviewer_prompt, task, latest_coder)
+        guidance = (
+            build_runtime_guidance(state, target_agent="reviewer")
+            if state.get("adaptive_interventions", True)
+            else RuntimeGuidance(enabled=False)
+        )
+        intervention_state = record_intervention(state, guidance)
+        active_policy = intervention_state["active_policy"]
+        interventions = intervention_state["interventions"]
+        guidance_dict = guidance.to_dict() if guidance.enabled else None
+
+        if guidance.enabled:
+            print(f"[policy_engine] Applying {guidance.policy} to reviewer at iteration {state['iteration']}")
+
+        history = build_reviewer_request(reviewer_prompt, task, latest_coder, guidance_dict)
         text, latency, tokens, comp_tokens, error_flag = request_response(history,client)
         flag = state["flag"][:]
  
@@ -96,6 +143,22 @@ def make_reviewer_node(reviewer_prompt,client):
             completion_reason = state.get("completion_reason", "")
         terminated_by_detector = state.get("terminated_by_detector", False)
 
+        partial_state = {
+            **state,
+            "messages": updated_messages,
+            "sender": "reviewer",
+            "iteration": state["iteration"] + 1,
+            "flag": flag,
+            "total_tokens": total_tokens,
+            "interventions": interventions,
+            "active_policy": active_policy,
+        }
+        recovery = evaluate_recovery(
+            {**state, "interventions": interventions, "active_policy": active_policy},
+            partial_state,
+            "reviewer",
+        )
+
         return {
             "messages":     [new_message],
             "sender":       "reviewer",
@@ -106,6 +169,9 @@ def make_reviewer_node(reviewer_prompt,client):
             "completion_turn": completion_turn,
             "completion_reason": completion_reason,
             "terminated_by_detector": terminated_by_detector,
+            "interventions": recovery["interventions"],
+            "active_policy": recovery["active_policy"],
+            "adaptive_interventions": state.get("adaptive_interventions", True),
         }
         
     time.sleep(1)
