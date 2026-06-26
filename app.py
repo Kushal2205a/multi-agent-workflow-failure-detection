@@ -90,9 +90,9 @@ div[data-testid="stExpander"] {
 
 
 
-st.markdown('<div class="main-title">Multi agent Workflow Failure Detection</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">Adaptive Multi Agent Workflow Control</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="sub-title">Detects inefficient multi agent workflow patterns and measures token savings in real time.</div>',
+    '<div class="sub-title">Detects inefficient workflow patterns, applies runtime guidance, and terminates only when recovery fails.</div>',
     unsafe_allow_html=True
 )
 st.divider()
@@ -190,7 +190,7 @@ def build_feed_md(rows: list) -> str:
 
         if deadlock:
             icon      = "🔴"
-            flag_note = f"&nbsp;&nbsp;← **loop_detector fired: {', '.join(new_flags or row['flags'])}**"
+            flag_note = f"&nbsp;&nbsp;← **termination fallback: {', '.join(new_flags or row['flags'])}**"
         elif sender == "coder":
             icon      = "🟢"
             flag_note = f"&nbsp;&nbsp;`{', '.join(new_flags)}`" if new_flags else ""
@@ -205,28 +205,41 @@ def build_feed_md(rows: list) -> str:
             f"<sub>{preview}…</sub>"
         )
 
+        for intervention in row.get("new_interventions", []):
+            parts.append(
+                f"🟡 **RUNTIME GUIDANCE APPLIED** &nbsp;·&nbsp; "
+                f"{intervention.get('policy')} &nbsp;·&nbsp; "
+                f"{intervention.get('target_agent')} &nbsp;·&nbsp; "
+                f"{intervention.get('outcome')}"
+            )
+
     return "\n\n---\n\n".join(parts)
 
 
 
 if run_clicked:
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.subheader("Without loop_detector")
+        st.subheader("Baseline")
         status1 = st.empty()
         feed1   = st.empty()
 
     with col2:
-        st.subheader("With loop_detector")
+        st.subheader("Monitor Only")
         status2 = st.empty()
         feed2   = st.empty()
+
+    with col3:
+        st.subheader("Adaptive Intervention")
+        status3 = st.empty()
+        feed3   = st.empty()
 
 
     status1.info("Running…")
     rows1 = []
 
-    for event in stream_single(task_prompt, coder_prompt, reviewer_prompt, use_sentinel=False):
+    for event in stream_single(task_prompt, coder_prompt, reviewer_prompt, use_sentinel=False, adaptive_interventions=False):
         rows1.append(event)
         feed1.markdown(build_feed_md(rows1), unsafe_allow_html=True)
 
@@ -238,7 +251,7 @@ if run_clicked:
     status2.info("Running…")
     rows2 = []
 
-    for event in stream_single(task_prompt, coder_prompt, reviewer_prompt, use_sentinel=True):
+    for event in stream_single(task_prompt, coder_prompt, reviewer_prompt, use_sentinel=True, adaptive_interventions=False):
         rows2.append(event)
         feed2.markdown(build_feed_md(rows2), unsafe_allow_html=True)
         if event["deadlock"]:
@@ -257,12 +270,38 @@ if run_clicked:
     else:
         status2.success(f"Complete,  {turns_2} turns · {total_tokens_2:,} tokens")
 
+    status3.info("Running…")
+    rows3 = []
+
+    for event in stream_single(task_prompt, coder_prompt, reviewer_prompt, use_sentinel=True, adaptive_interventions=True):
+        rows3.append(event)
+        feed3.markdown(build_feed_md(rows3), unsafe_allow_html=True)
+        if event["deadlock"]:
+            break
+
+    total_tokens_3 = rows3[-1]["total_tokens"] if rows3 else 0
+    turns_3        = rows3[-1]["iteration"]    if rows3 else 0
+    detected_3     = rows3[-1]["deadlock"]     if rows3 else False
+    interventions  = rows3[-1].get("interventions", []) if rows3 else []
+    applied        = sum(1 for i in interventions if i.get("outcome") != "skipped")
+    recovered      = sum(1 for i in interventions if i.get("outcome") == "recovered")
+
+    if detected_3:
+        status3.error(
+            f"Termination fallback at turn {turns_3} · "
+            f"{total_tokens_3:,} tokens · recoveries: {recovered}/{applied}"
+        )
+    else:
+        status3.success(
+            f"Complete, {turns_3} turns · {total_tokens_3:,} tokens · recoveries: {recovered}/{applied}"
+        )
+
 
     st.divider()
     st.markdown("## Benchmark Results")
 
-    tokens_saved = total_tokens_1 - total_tokens_2
-    turns_saved  = turns_1 - turns_2
+    tokens_saved = total_tokens_1 - total_tokens_3
+    turns_saved  = turns_1 - turns_3
     pct_saved    = (tokens_saved / total_tokens_1 * 100) if total_tokens_1 > 0 else 0
 
     st.markdown(
@@ -279,10 +318,10 @@ if run_clicked:
     )
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Turns saved",      f"{turns_saved}",    f"{turns_1} → {turns_2}")
+    m1.metric("Turns saved",      f"{turns_saved}",    f"{turns_1} → {turns_3}")
     m2.metric("Tokens saved",     f"{tokens_saved:,}", f"{pct_saved:.0f}% reduction")
-    m3.metric("Without detector", f"{total_tokens_1:,} tokens")
-    m4.metric("With detector",    f"{total_tokens_2:,} tokens")
+    m3.metric("Interventions",    f"{applied}",        f"{recovered} recovered")
+    m4.metric("Adaptive tokens",  f"{total_tokens_3:,} tokens")
 
     st.write("")
 
@@ -292,21 +331,21 @@ if run_clicked:
 
     max_turn = max(
         max((r["message"]["turn"] for r in rows1), default=0),
-        max((r["message"]["turn"] for r in rows2), default=0),
+        max((r["message"]["turn"] for r in rows3), default=0),
     )
     x_labels = [f"Turn {t}" for t in range(1, max_turn + 1)]
     t1 = tokens_by_turn(rows1)
-    t2 = tokens_by_turn(rows2)
+    t2 = tokens_by_turn(rows3)
 
     fig1 = go.Figure()
     fig1.add_trace(go.Bar(
-        name="Without detector",
+        name="Baseline",
         x=x_labels,
         y=[t1.get(t, 0) for t in range(1, max_turn + 1)],
         marker_color="#ef4444",
     ))
     fig1.add_trace(go.Bar(
-        name="With detector",
+        name="Adaptive intervention",
         x=x_labels,
         y=[t2.get(t, 0) for t in range(1, max_turn + 1)],
         marker_color="#22c55e",
@@ -333,13 +372,13 @@ if run_clicked:
         return out
 
     rev1 = reviewer_rows(rows1)
-    rev2 = reviewer_rows(rows2)
+    rev2 = reviewer_rows(rows3)
 
     if rev1 or rev2:
         fig2 = go.Figure()
         if rev1:
             fig2.add_trace(go.Scatter(
-                name="Without detector",
+                name="Baseline",
                 x=[r["reviewer_turn"] for r in rev1],
                 y=[r["tokens"]        for r in rev1],
                 mode="lines+markers",
@@ -348,7 +387,7 @@ if run_clicked:
             ))
         if rev2:
             fig2.add_trace(go.Scatter(
-                name="With detector",
+                name="Adaptive intervention",
                 x=[r["reviewer_turn"] for r in rev2],
                 y=[r["tokens"]        for r in rev2],
                 mode="lines+markers",
