@@ -2,13 +2,14 @@ from langgraph.graph import StateGraph, END
 from config import MAX_TURNS
 from state import AgentState
 from monitor import is_deadlock, detect_review_status
+from policy_engine import should_terminate_after_interventions
 from config import CODER, REVIEWER
   
 from llm_client import PROMPT
 from agents import make_coder_node, make_reviewer_node
  
  
-def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bool = True):
+def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bool = True, adaptive_interventions: bool = True):
  
     coder_node    = make_coder_node(coder_prompt,client)
     reviewer_node = make_reviewer_node(reviewer_prompt,client)
@@ -29,8 +30,12 @@ def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bo
             print(f"Task completed at iteration {state['iteration']}. Reason: reviewer_approved")
             return "end"
         if use_sentinel and is_deadlock(state):
-            print(f"Deadlock detected at iteration {state['iteration']}. Flags: {state['flag']}")
-            return "end"
+            if not adaptive_interventions:
+                print(f"Deadlock detected at iteration {state['iteration']}. Flags: {state['flag']}")
+                return "end"
+            if should_terminate_after_interventions(state):
+                print(f"Deadlock fallback triggered at iteration {state['iteration']}. Flags: {state['flag']}")
+                return "end"
         if state["iteration"] >= MAX_TURNS:
             print(f"[should_continue] max turns reached ({state['iteration']} >= {MAX_TURNS})")
             return "end"
@@ -61,6 +66,9 @@ if __name__ == "__main__":
         "completion_turn": 0,
         "completion_reason": "",
         "terminated_by_detector": False,
+        "interventions": [],
+        "active_policy": None,
+        "adaptive_interventions": True,
     }
  
     result = app.invoke(initial_state)
