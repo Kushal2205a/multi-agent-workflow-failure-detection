@@ -82,7 +82,8 @@ def _messages_by_sender(state: Dict[str, Any], sender: str) -> List[Dict[str, An
 def _latest_similarity(messages: List[Dict[str, Any]]) -> Optional[float]:
     if len(messages) < 2:
         return None
-    return similarity(messages[-1].get("content", ""), messages[-2].get("content", ""))
+    sender = messages[-1].get("sender")
+    return similarity(messages[-1].get("content", ""), messages[-2].get("content", ""), sender)
 
 
 def _latest_tokens(messages: List[Dict[str, Any]]) -> int:

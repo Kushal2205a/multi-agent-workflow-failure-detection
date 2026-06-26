@@ -1,9 +1,31 @@
 import re
 
 STATUS_REGEX = re.compile(
-    r"\*{0,2}_{0,2}`?(?:OVERALL )?STATUS\*{0,2}_{0,2}`?:?\s*(?:\*{0,2}_{0,2}`?\s*)*(APPROVED|CHANGES_REQUIRED)",
+    r"\*{0,2}_{0,2}`?(?:OVERALL )?STATUS\*{0,2}_{0,2}`?:?\s*(?:\*{0,2}_{0,2}`?\s*)*(APPROVED|CHANGES_REQUIRED|REQUIRES_IMPROVEMENT|REQUIRES IMPROVEMENT|MINOR_ISSUES|MINOR|PENDING)",
     re.IGNORECASE,
 )
+
+SIGNAL_STOPWORDS = {
+    "a", "an", "and", "are", "as", "be", "by", "for", "from", "in", "is",
+    "it", "of", "on", "or", "that", "the", "this", "to", "using", "with",
+    "code", "review", "reviewer", "findings", "category", "severity",
+    "description", "suggested", "fix", "status", "minor", "major",
+}
+
+REVIEW_LABEL_REGEX = re.compile(
+    r"^\s*(?:#+\s*)?(?:code review|review findings|category|severity|description|suggested fix|status)\b:?\s*",
+    re.IGNORECASE,
+)
+
+NEGATIVE_REVIEW_PATTERNS = [
+    r"\breject(?:ed|ion)?\b",
+    r"\bchanges?\s+required\b",
+    r"\brequires?\s+improvement\b",
+    r"\bnot\s+(?:complete|implemented|addressed|fixed|satisfied)\b",
+    r"\bstill\s+(?:missing|incorrect|failing|unresolved|not)\b",
+    r"\bmust\s+(?:fix|add|change|implement|address)\b",
+    r"\bneeds?\s+(?:fixing|changes|work|implementation)\b",
+]
 
 
 def detect_review_status(messages):
@@ -66,6 +88,30 @@ def contains_keyword(text, keywords):
     return False
 
 
+def _strip_markdown_noise(text):
+    text = re.sub(r"`{1,3}", " ", text)
+    text = re.sub(r"[*_>#\-]+", " ", text)
+    return text
+
+
+def normalize_for_signal(text, sender=None):
+    """Normalize content before signal detection so boilerplate labels do not dominate."""
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if sender == "reviewer" and REVIEW_LABEL_REGEX.match(stripped):
+            stripped = REVIEW_LABEL_REGEX.sub("", stripped).strip()
+            if not stripped:
+                continue
+        lines.append(stripped)
+
+    text = _strip_markdown_noise("\n".join(lines)).lower()
+    words = re.findall(r"[a-zA-Z_][a-zA-Z0-9_]+", text)
+    return " ".join(w for w in words if w not in SIGNAL_STOPWORDS and len(w) > 2)
+
+
 
 def add_flag(flag,new_flag):
     if new_flag not in flag:
@@ -76,11 +122,20 @@ def detect_repetition(messages):
     if len(messages) < 2 :
         return False 
 
-    return messages[-1]["content"] == messages[-2]["content"]
+    sender = messages[-1].get("sender")
+    same_sender = [m for m in messages if m.get("sender") == sender]
+    if len(same_sender) < 2:
+        return False
 
-def similarity(a,b):
-    a_words =   set(a.lower().split())
-    b_words =   set(b.lower().split())
+    last = normalize_for_signal(same_sender[-1].get("content", ""), sender)
+    prev = normalize_for_signal(same_sender[-2].get("content", ""), sender)
+    return bool(last and prev and last == prev)
+
+def similarity(a,b, sender=None):
+    a_text = normalize_for_signal(a, sender)
+    b_text = normalize_for_signal(b, sender)
+    a_words =   set(a_text.split())
+    b_words =   set(b_text.split())
     
     union = a_words | b_words 
     if not union:
@@ -104,11 +159,11 @@ def detect_stagnation(updated_messages):
     coder_msgs    = [m for m in updated_messages if m["sender"] == "coder"]
 
     if len(reviewer_msgs) >= 2:
-        if similarity(reviewer_msgs[-1]["content"], reviewer_msgs[-2]["content"]) > 0.5:
+        if similarity(reviewer_msgs[-1]["content"], reviewer_msgs[-2]["content"], "reviewer") > 0.72:
             return True
 
     if len(coder_msgs) >= 2:
-        if similarity(coder_msgs[-1]["content"], coder_msgs[-2]["content"]) > 0.6:
+        if similarity(coder_msgs[-1]["content"], coder_msgs[-2]["content"], "coder") > 0.82:
             return True
 
     return False
@@ -148,13 +203,23 @@ def detect_rejection_loop(messages):
     
     last = reviewer_texts[-1]["content"].lower()
     prev = reviewer_texts[-2]["content"].lower()
-    
-    rejection_keywords = [
-        "reject", "missing", "incorrect", "fix", "not complete"
-    ]
-    
-    
-    return contains_keyword(last, rejection_keywords) and contains_keyword(prev, rejection_keywords)
+
+    last_status = detect_review_status([reviewer_texts[-1]])
+    prev_status = detect_review_status([reviewer_texts[-2]])
+    if last_status == "approved":
+        return False
+
+    status_loop = (
+        last_status == "changes_required"
+        and prev_status == "changes_required"
+        and similarity(last, prev, "reviewer") > 0.72
+    )
+    explicit_rejection_loop = all(
+        any(re.search(pattern, text) for pattern in NEGATIVE_REVIEW_PATTERNS)
+        for text in (last, prev)
+    )
+
+    return status_loop or explicit_rejection_loop
 
 def _message_tokens(msg):
     """Get per-message token count, falling back to content length estimate."""
@@ -239,30 +304,30 @@ def is_deadlock(state):
 
 
 def update_flag(flag, updated_messages):
-            
-    
+    current_flags = []
+    latest = updated_messages[-1] if updated_messages else {}
+    if latest.get("error") or str(latest.get("content", "")).startswith("[LLM_ERROR"):
+        current_flags = add_flag(current_flags, "llm_error")
+
     if detect_repetition(updated_messages):
-        flag = add_flag(flag,"repeat")
-        
+        current_flags = add_flag(current_flags,"repeat")
+
     if detect_open_loops(updated_messages):
-        flag = add_flag(flag,"open_loop")  
-        
-    
-    
+        current_flags = add_flag(current_flags,"open_loop")
+
     if detect_latency(updated_messages):
-        flag = add_flag(flag,"latency")
-    
+        current_flags = add_flag(current_flags,"latency")
+
     if detect_error_loop(updated_messages):
-        flag = add_flag(flag,"error_loop")
-        
+        current_flags = add_flag(current_flags,"error_loop")
+
     if detect_stagnation(updated_messages):
-        flag = add_flag(flag, "stagnation")
-    
+        current_flags = add_flag(current_flags, "stagnation")
+
     if detect_rejection_loop(updated_messages):
-        flag = add_flag(flag,"rejection_loop")
-    
+        current_flags = add_flag(current_flags,"rejection_loop")
+
     if detect_escalation(updated_messages):
-        flag = add_flag(flag,"escalation")
-        
-    
-    return flag 
+        current_flags = add_flag(current_flags,"escalation")
+
+    return current_flags
