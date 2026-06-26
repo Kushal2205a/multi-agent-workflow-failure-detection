@@ -1,4 +1,4 @@
-from typing import TypedDict, Annotated, List 
+from typing import TypedDict, Annotated, List, Optional, Dict, Any
 import operator, time 
 
 
@@ -12,3 +12,6 @@ class AgentState(TypedDict):
     completion_turn: int
     completion_reason: str
     terminated_by_detector: bool
+    interventions: List[Dict[str, Any]]
+    active_policy: Optional[Dict[str, Any]]
+    adaptive_interventions: bool
