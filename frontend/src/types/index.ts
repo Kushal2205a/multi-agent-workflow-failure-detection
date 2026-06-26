@@ -20,6 +20,10 @@ export interface StreamEvent {
   completion_turn: number;
   completion_reason: string;
   terminated_by_detector: boolean;
+  interventions: RuntimeIntervention[];
+  active_policy?: RuntimeIntervention | null;
+  latest_intervention?: RuntimeIntervention | null;
+  new_interventions?: RuntimeIntervention[];
 }
 
 export interface WorkflowSummary {
@@ -32,12 +36,15 @@ export interface WorkflowSummary {
   completion_turn: number;
   completion_reason: string;
   terminated_by_detector: boolean;
+  interventions: RuntimeIntervention[];
+  interventions_applied: number;
+  successful_recoveries: number;
 }
 
 export interface LogEntry {
   id: number;
   timestamp: string;
-  workflow: "baseline" | "protected";
+  workflow: "baseline" | "monitor_only" | "protected";
   message: string;
 }
 
@@ -45,4 +52,14 @@ export interface WorkflowState {
   rows: StreamEvent[];
   summary: WorkflowSummary | null;
   running: boolean;
+}
+
+export interface RuntimeIntervention {
+  enabled: boolean;
+  target_agent: "coder" | "reviewer" | "";
+  trigger: string;
+  policy: string;
+  instruction?: string;
+  outcome: "applied" | "recovered" | "failed" | "skipped";
+  iteration?: number;
 }

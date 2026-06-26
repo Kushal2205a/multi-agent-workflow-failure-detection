@@ -45,6 +45,9 @@ export function generateCSV(
       ? baseline.rows[baseline.rows.length - 1].completion_reason
       : "",
     terminated_by_detector: false,
+    interventions: [],
+    interventions_applied: 0,
+    successful_recoveries: 0,
   };
 
   const ps = protectedState.summary ?? {
@@ -69,6 +72,15 @@ export function generateCSV(
       ? protectedState.rows[protectedState.rows.length - 1].completion_reason
       : "",
     terminated_by_detector: protectedState.rows.some((r) => r.terminated_by_detector),
+    interventions: protectedState.rows.length > 0
+      ? protectedState.rows[protectedState.rows.length - 1].interventions
+      : [],
+    interventions_applied: protectedState.rows.length > 0
+      ? protectedState.rows[protectedState.rows.length - 1].interventions.filter((i) => i.outcome !== "skipped").length
+      : 0,
+    successful_recoveries: protectedState.rows.length > 0
+      ? protectedState.rows[protectedState.rows.length - 1].interventions.filter((i) => i.outcome === "recovered").length
+      : 0,
   };
 
   const tokensSaved = bs.total_tokens - ps.total_tokens;
@@ -104,6 +116,8 @@ export function generateCSV(
   lines.push(`Protected Completion Reason,${ps.completion_reason}`);
   lines.push(`Baseline Terminated By Detector,${bs.terminated_by_detector ? "Yes" : "No"}`);
   lines.push(`Protected Terminated By Detector,${ps.terminated_by_detector ? "Yes" : "No"}`);
+  lines.push(`Interventions Applied,${ps.interventions_applied}`);
+  lines.push(`Successful Recoveries,${ps.successful_recoveries}`);
   lines.push("");
 
   lines.push(

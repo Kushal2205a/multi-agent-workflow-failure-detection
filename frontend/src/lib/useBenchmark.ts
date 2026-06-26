@@ -15,6 +15,7 @@ const INITIAL_STATE: WorkflowState = {
 
 export function useBenchmark() {
   const [baseline, setBaseline] = useState<WorkflowState>(INITIAL_STATE);
+  const [monitorOnly, setMonitorOnly] = useState<WorkflowState>(INITIAL_STATE);
   const [protected_, setProtected] = useState<WorkflowState>(INITIAL_STATE);
   const [running, setRunning] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -30,6 +31,7 @@ export function useBenchmark() {
       wsRef.current?.close();
 
       setBaseline({ ...INITIAL_STATE, running: true });
+      setMonitorOnly({ ...INITIAL_STATE, running: true });
       setProtected({ ...INITIAL_STATE, running: true });
       setRunning(true);
       setLogs([]);
@@ -64,6 +66,8 @@ export function useBenchmark() {
           });
           if (msg.workflow === "baseline") {
             setBaseline(updater);
+          } else if (msg.workflow === "monitor_only") {
+            setMonitorOnly(updater);
           } else {
             setProtected(updater);
           }
@@ -76,12 +80,14 @@ export function useBenchmark() {
           });
           if (msg.workflow === "baseline") {
             setBaseline(updater);
+          } else if (msg.workflow === "monitor_only") {
+            setMonitorOnly(updater);
           } else {
             setProtected(updater);
           }
 
           completedRef.current += 1;
-          if (completedRef.current >= 2) {
+          if (completedRef.current >= 3) {
             setRunning(false);
           }
         } else if (msg.type === "log") {
@@ -89,7 +95,7 @@ export function useBenchmark() {
           const entries: LogEntry[] = lines.map((line) => ({
             id: ++logIdRef.current,
             timestamp: new Date().toISOString(),
-            workflow: msg.workflow as "baseline" | "protected",
+            workflow: msg.workflow as "baseline" | "monitor_only" | "protected",
             message: line,
           }));
           setLogs((prev) => [...prev, ...entries]);
@@ -121,6 +127,9 @@ export function useBenchmark() {
                         completion_turn: prev.rows[prev.rows.length - 1].completion_turn,
                         completion_reason: prev.rows[prev.rows.length - 1].completion_reason,
                         terminated_by_detector: false,
+                        interventions: prev.rows[prev.rows.length - 1].interventions,
+                        interventions_applied: 0,
+                        successful_recoveries: 0,
                       }
                     : {
                         total_tokens: 0,
@@ -132,6 +141,47 @@ export function useBenchmark() {
                         completion_turn: 0,
                         completion_reason: "",
                         terminated_by_detector: false,
+                        interventions: [],
+                        interventions_applied: 0,
+                        successful_recoveries: 0,
+                      },
+                }
+              : prev,
+        );
+        setMonitorOnly(
+          (prev): WorkflowState =>
+            prev.running
+              ? {
+                  ...prev,
+                  running: false,
+                  summary: prev.rows.length > 0
+                    ? {
+                        total_tokens: prev.rows[prev.rows.length - 1].total_tokens,
+                        turns: prev.rows[prev.rows.length - 1].iteration,
+                        deadlock: prev.rows.some((r) => r.deadlock),
+                        flags: prev.rows[prev.rows.length - 1].flags,
+                        error: "Connection closed before completion",
+                        task_completed: prev.rows[prev.rows.length - 1].task_completed,
+                        completion_turn: prev.rows[prev.rows.length - 1].completion_turn,
+                        completion_reason: prev.rows[prev.rows.length - 1].completion_reason,
+                        terminated_by_detector: prev.rows.some((r) => r.terminated_by_detector),
+                        interventions: [],
+                        interventions_applied: 0,
+                        successful_recoveries: 0,
+                      }
+                    : {
+                        total_tokens: 0,
+                        turns: 0,
+                        deadlock: false,
+                        flags: [],
+                        error: "Connection closed before completion",
+                        task_completed: false,
+                        completion_turn: 0,
+                        completion_reason: "",
+                        terminated_by_detector: false,
+                        interventions: [],
+                        interventions_applied: 0,
+                        successful_recoveries: 0,
                       },
                 }
               : prev,
@@ -153,6 +203,9 @@ export function useBenchmark() {
                         completion_turn: prev.rows[prev.rows.length - 1].completion_turn,
                         completion_reason: prev.rows[prev.rows.length - 1].completion_reason,
                         terminated_by_detector: prev.rows.some((r) => r.terminated_by_detector),
+                        interventions: prev.rows[prev.rows.length - 1].interventions,
+                        interventions_applied: prev.rows[prev.rows.length - 1].interventions.filter((i) => i.outcome !== "skipped").length,
+                        successful_recoveries: prev.rows[prev.rows.length - 1].interventions.filter((i) => i.outcome === "recovered").length,
                       }
                     : {
                         total_tokens: 0,
@@ -164,6 +217,9 @@ export function useBenchmark() {
                         completion_turn: 0,
                         completion_reason: "",
                         terminated_by_detector: false,
+                        interventions: [],
+                        interventions_applied: 0,
+                        successful_recoveries: 0,
                       },
                 }
               : prev,
@@ -175,6 +231,7 @@ export function useBenchmark() {
 
   return {
     baseline,
+    monitorOnly,
     protected: protected_,
     running,
     start,

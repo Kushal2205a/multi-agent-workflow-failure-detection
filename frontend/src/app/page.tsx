@@ -9,6 +9,7 @@ import LogPanel from "@/components/LogPanel";
 export default function Home() {
   const {
     baseline,
+    monitorOnly,
     protected: protectedState,
     running,
     start,
@@ -25,15 +26,16 @@ export default function Home() {
           Multi-agent Workflow Failure Detection
         </h1>
         <p className="text-gray-500 text-sm">
-          Detects inefficient multi-agent workflow patterns and measures token
-          savings in real time.
+          Detects inefficient multi-agent workflow patterns and attempts adaptive
+          runtime recovery before termination.
         </p>
       </div>
 
       <ConfigSection onStart={start} disabled={running} />
 
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-3 gap-5">
         <WorkflowPanel id="baseline" state={baseline} />
+        <WorkflowPanel id="monitor_only" state={monitorOnly} />
         <WorkflowPanel id="protected" state={protectedState} />
       </div>
 
@@ -41,6 +43,7 @@ export default function Home() {
 
       <BenchmarkResults
         baseline={baseline}
+        monitorOnly={monitorOnly}
         protected={protectedState}
         task={task}
         coderPrompt={coderPrompt}

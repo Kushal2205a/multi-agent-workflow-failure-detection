@@ -8,6 +8,7 @@ import ReviewerChart from "./ReviewerChart";
 
 interface BenchmarkResultsProps {
   baseline: WorkflowState;
+  monitorOnly: WorkflowState;
   protected: WorkflowState;
   task: string;
   coderPrompt: string;
@@ -31,11 +32,15 @@ function getBestSummary(
     completion_turn: last?.completion_turn ?? 0,
     completion_reason: last?.completion_reason ?? "",
     terminated_by_detector: last?.terminated_by_detector ?? false,
+    interventions: last?.interventions ?? [],
+    interventions_applied: last?.interventions?.filter((i) => i.outcome !== "skipped").length ?? 0,
+    successful_recoveries: last?.interventions?.filter((i) => i.outcome === "recovered").length ?? 0,
   };
 }
 
 export default function BenchmarkResults({
   baseline,
+  monitorOnly,
   protected: protectedState,
   task,
   coderPrompt,
@@ -51,6 +56,7 @@ export default function BenchmarkResults({
   const toastTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null> = useRef(null);
 
   const bs = getBestSummary(baseline.rows, baseline.summary);
+  const ms = getBestSummary(monitorOnly.rows, monitorOnly.summary);
   const ps = getBestSummary(protectedState.rows, protectedState.summary);
 
   const hasCharts = baseline.rows.length > 0 || protectedState.rows.length > 0;
@@ -223,7 +229,7 @@ export default function BenchmarkResults({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 max-w-[66%] mx-auto">
+      <div className="grid grid-cols-3 gap-4">
         <div className="rounded-xl border border-charcoal-700 bg-[#181818] p-5">
           <div className="text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider">
             Without Detector
@@ -238,7 +244,20 @@ export default function BenchmarkResults({
         </div>
         <div className="rounded-xl border border-charcoal-700 bg-[#181818] p-5">
           <div className="text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider">
-            With Detector
+            Monitor Only
+          </div>
+          <div className="text-3xl font-bold text-white">
+            {ms.total_tokens.toLocaleString()}{" "}
+            <span className="text-base font-normal text-gray-400">tokens</span>
+          </div>
+          <div className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+            {ms.turns} turns{ms.deadlock ? " - terminated" : ""}
+            {monitorOnly.summary?.error ? " (interrupted)" : ""}
+          </div>
+        </div>
+        <div className="rounded-xl border border-charcoal-700 bg-[#181818] p-5">
+          <div className="text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider">
+            Adaptive Intervention
           </div>
           <div className="text-3xl font-bold text-white">
             {ps.total_tokens.toLocaleString()}{" "}
@@ -249,6 +268,49 @@ export default function BenchmarkResults({
             {protectedState.summary?.error ? " (interrupted)" : ""}
           </div>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-charcoal-700 bg-[#181818] p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-white">Runtime Interventions</h3>
+          <div className="text-xs text-gray-500">
+            {ps.successful_recoveries}/{ps.interventions_applied} recovered
+          </div>
+        </div>
+        {ps.interventions.length === 0 ? (
+          <p className="text-xs text-gray-500">No runtime guidance was applied.</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            {ps.interventions.map((intervention, index) => (
+              <div
+                key={`${intervention.policy}-${intervention.iteration}-${index}`}
+                className="rounded-lg border border-charcoal-700 bg-charcoal-900/60 p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-amber-200">
+                    Turn {intervention.iteration}
+                  </span>
+                  <span
+                    className={`text-[11px] font-semibold ${
+                      intervention.outcome === "recovered"
+                        ? "text-green-400"
+                        : intervention.outcome === "failed"
+                          ? "text-red-400"
+                          : "text-gray-400"
+                    }`}
+                  >
+                    {intervention.outcome}
+                  </span>
+                </div>
+                <div className="mt-2 text-sm text-white">{intervention.trigger}</div>
+                <div className="mt-1 text-xs text-gray-400">{intervention.policy}</div>
+                <div className="mt-2 text-xs text-gray-500">
+                  Target: {intervention.target_agent || "none"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="border-t border-charcoal-700 pt-6 space-y-5">

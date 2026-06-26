@@ -1,7 +1,7 @@
 import type { StreamEvent } from "@/types";
 
 export default function FeedRow({ event }: { event: StreamEvent }) {
-  const { message, new_flags, deadlock, flags } = event;
+  const { message, new_flags, deadlock, flags, new_interventions } = event;
   const { sender, turn, tokens, latency, content } = message;
 
   const isDeadlock = deadlock;
@@ -58,8 +58,22 @@ export default function FeedRow({ event }: { event: StreamEvent }) {
         </p>
         {isDeadlock && (
           <div className="mt-1 text-xs font-bold text-deadlock">
-            loop_detector fired:{" "}
+            termination fallback:{" "}
             {(new_flags.length > 0 ? new_flags : flags).join(", ")}
+          </div>
+        )}
+        {new_interventions && new_interventions.length > 0 && (
+          <div className="mt-2 space-y-1">
+            {new_interventions.map((intervention, index) => (
+              <div
+                key={`${intervention.policy}-${intervention.iteration}-${index}`}
+                className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-100"
+              >
+                Runtime guidance applied: {intervention.policy} for{" "}
+                {intervention.target_agent} ({intervention.trigger}) -{" "}
+                {intervention.outcome}
+              </div>
+            ))}
           </div>
         )}
       </div>

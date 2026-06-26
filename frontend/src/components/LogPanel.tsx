@@ -117,10 +117,16 @@ export default function LogPanel({ logs }: LogPanelProps) {
                 className={`shrink-0 w-[60px] text-center rounded px-1 ${
                   entry.workflow === "protected"
                     ? "bg-amber-900/40 text-amber-400"
+                    : entry.workflow === "monitor_only"
+                      ? "bg-purple-900/40 text-purple-300"
                     : "bg-blue-900/40 text-blue-400"
                 }`}
               >
-                {entry.workflow === "protected" ? "PRT" : "BSL"}
+                {entry.workflow === "protected"
+                  ? "ADP"
+                  : entry.workflow === "monitor_only"
+                    ? "MON"
+                    : "BSL"}
               </span>
               <span className="text-gray-300 whitespace-pre-wrap break-all">
                 {entry.message}

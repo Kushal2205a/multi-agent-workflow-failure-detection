@@ -2,15 +2,17 @@ import type { WorkflowState } from "@/types";
 import FeedRow from "./FeedRow";
 
 interface WorkflowPanelProps {
-  id: "baseline" | "protected";
+  id: "baseline" | "monitor_only" | "protected";
   state: WorkflowState;
 }
 
 export default function WorkflowPanel({ id, state }: WorkflowPanelProps) {
   const isBaseline = id === "baseline";
   const title = isBaseline
-    ? "Without Loop Detector"
-    : "With Loop Detector";
+    ? "Baseline"
+    : id === "monitor_only"
+      ? "Monitor Only"
+      : "Adaptive Intervention";
 
   let statusIcon = "";
   let statusColor = "#6b7280";
@@ -30,7 +32,9 @@ export default function WorkflowPanel({ id, state }: WorkflowPanelProps) {
   } else if (state.summary?.deadlock) {
     statusIcon = "\uD83D\uDDD1\uFE0F";
     statusColor = "#dc2626";
-    statusText = `Deadlock detected at turn ${state.summary.turns}`;
+    statusText = id === "protected"
+      ? `Termination fallback at turn ${state.summary.turns}`
+      : `Deadlock detected at turn ${state.summary.turns}`;
     statsLine = `${state.summary.turns} turns \u00B7 ${state.summary.total_tokens.toLocaleString()} tokens`;
     shadowStyle = "0 0 0 1px rgba(239,68,68,0.10)";
   } else if (state.summary && !state.summary.error && !state.summary.deadlock) {
@@ -87,6 +91,11 @@ export default function WorkflowPanel({ id, state }: WorkflowPanelProps) {
           {state.summary.deadlock && (
             <span className="text-deadlock font-semibold">
               Flags: {state.summary.flags.join(", ")}
+            </span>
+          )}
+          {state.summary.interventions_applied > 0 && (
+            <span className="text-amber-300 font-semibold">
+              {state.summary.successful_recoveries}/{state.summary.interventions_applied} recovered
             </span>
           )}
           {state.summary.error && (
