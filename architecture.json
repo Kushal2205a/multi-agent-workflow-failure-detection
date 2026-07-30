@@ -1,0 +1,932 @@
+{
+  "metadata": {
+    "projectName": "Real-time Agentic Deadlock Orchestrator",
+    "architectureStyle": "Multi-Agent Loop with Runtime Deadlock Detection & Adaptive Intervention",
+    "primaryLanguage": "Python (backend) / TypeScript (frontend)"
+  },
+
+  "systemFlow": [
+    "User (Task via Streamlit or Next.js)",
+    "LangGraph Agent Loop (Coder ↔ Reviewer)",
+    "Deadlock Detection Engine (Lightweight Signal Analysis)",
+    "Adaptive Policy Engine (Runtime Guidance + Recovery Evaluation)",
+    "Results (Dashboard / WebSocket / CSV Export)"
+  ],
+
+  "components": [
+    {
+      "id": "agent-orchestration",
+      "title": "Agent Orchestration",
+      "type": "component",
+      "description": "LangGraph-based multi-agent loop that drives coder and reviewer agents through iterative code generation and review cycles. Manages state transitions, turn counting, and termination logic.",
+      "importance": 10,
+      "responsibilities": [
+        "Build and compile the LangGraph StateGraph with coder and reviewer nodes",
+        "Define agent state schema (messages, flags, tokens, iterations)",
+        "Route conditional edges between coder and reviewer based on review status, deadlock detection, and max turns",
+        "Initialize state and run the streaming workflow generator"
+      ],
+      "children": [
+        {
+          "id": "file-graph",
+          "title": "graph.py",
+          "type": "file",
+          "relativePath": "graph.py",
+          "lineCount": 79,
+          "purpose": "Builds the compiled LangGraph workflow with coder→reviewer loop, conditional routing, and termination logic.",
+          "responsibilities": [
+            "Create StateGraph with coder and reviewer nodes",
+            "Implement should_continue() with review status, deadlock, and max-turn checks",
+            "Set entry point and conditional edges (coder→reviewer→coder)",
+            "Compile and return the executable workflow"
+          ],
+          "dependsOn": ["state.py", "agents.py", "monitor.py", "policy_engine.py", "config.py", "llm_client.py"],
+          "children": [
+            {
+              "id": "fn-build-graph",
+              "title": "build_graph()",
+              "type": "function",
+              "description": "Factory that creates coder/reviewer nodes, defines should_continue routing logic, and compiles the LangGraph. Accepts prompts, client, and feature flags (use_sentinel, adaptive_interventions).",
+              "inputs": "coder_prompt: str, reviewer_prompt: str, client: OpenAI, use_sentinel: bool, adaptive_interventions: bool",
+              "outputs": "Compiled LangGraph StateGraph",
+              "importance": 10
+            },
+            {
+              "id": "fn-should-continue",
+              "title": "should_continue()",
+              "type": "function",
+              "description": "Conditional edge router. Returns 'end' if reviewer approves, deadlock is detected (with fallback), or MAX_TURNS reached. Otherwise routes to the opposite agent (coder→reviewer→coder).",
+              "inputs": "state: AgentState",
+              "outputs": "'end' | 'coder' | 'reviewer'",
+              "importance": 10
+            }
+          ]
+        },
+        {
+          "id": "file-state",
+          "title": "state.py",
+          "type": "file",
+          "relativePath": "state.py",
+          "lineCount": 17,
+          "purpose": "Defines the AgentState TypedDict schema used by LangGraph for all workflow state.",
+          "responsibilities": [
+            "Define AgentState with messages, sender, iteration, flags, tokens",
+            "Track task completion, termination reasons, and intervention history"
+          ],
+          "dependsOn": [],
+          "children": [
+            {
+              "id": "cls-agentstate",
+              "title": "AgentState",
+              "type": "function",
+              "description": "TypedDict schema for the entire multi-agent workflow state. Fields: messages (append-annotated list), sender, iteration, flag, total_tokens, task_completed, completion_turn/reason, terminated_by_detector, interventions, active_policy, adaptive_interventions.",
+              "inputs": "N/A (schema definition)",
+              "outputs": "N/A",
+              "importance": 9
+            }
+          ]
+        },
+        {
+          "id": "file-agents",
+          "title": "agents.py",
+          "type": "file",
+          "relativePath": "agents.py",
+          "lineCount": 178,
+          "purpose": "LangGraph node factories that create coder and reviewer agent nodes. Each node calls the LLM, runs deadlock detection, records interventions, and evaluates recovery.",
+          "responsibilities": [
+            "Create coder node that builds chat history, calls LLM, updates flags, records interventions",
+            "Create reviewer node that builds stateless review request, calls LLM, parses review status, updates flags",
+            "Handle LLM errors gracefully with llm_error flag",
+            "Evaluate recovery after each agent turn"
+          ],
+          "dependsOn": ["state.py", "monitor.py", "llm_client.py", "prompt_builder.py", "policy_engine.py"],
+          "children": [
+            {
+              "id": "fn-make-coder-node",
+              "title": "make_coder_node()",
+              "type": "function",
+              "description": "Factory returning a LangGraph node. Builds prompt history with runtime guidance injection, calls LLM, updates deadlock flags, records policy interventions, and evaluates recovery outcome.",
+              "inputs": "coder_prompt: str, client: OpenAI",
+              "outputs": "LangGraph node function",
+              "importance": 9
+            },
+            {
+              "id": "fn-make-reviewer-node",
+              "title": "make_reviewer_node()",
+              "type": "function",
+              "description": "Factory returning a reviewer LangGraph node. Extracts task and latest coder output, builds stateless review request with optional guidance, calls LLM, parses STATUS output for approval, updates flags and interventions.",
+              "inputs": "reviewer_prompt: str, client: OpenAI",
+              "outputs": "LangGraph node function",
+              "importance": 9
+            }
+          ]
+        },
+        {
+          "id": "file-runner",
+          "title": "runner.py",
+          "type": "file",
+          "relativePath": "runner.py",
+          "lineCount": 95,
+          "purpose": "Async generator that initializes agent state, runs the LangGraph, and streams per-turn events as structured dictionaries.",
+          "responsibilities": [
+            "Initialize AgentState with task prompt and default values",
+            "Run compiled LangGraph via app.stream()",
+            "Yield per-turn StreamEvent with message, flags, deadlock status, interventions",
+            "Track new flags and new interventions between turns"
+          ],
+          "dependsOn": ["graph.py", "monitor.py", "policy_engine.py", "config.py", "llm_client.py"],
+          "children": [
+            {
+              "id": "fn-stream-single",
+              "title": "stream_single()",
+              "type": "function",
+              "description": "Async generator that creates a compiled LangGraph, initializes state, streams events per turn. Each yield contains: message, flags, new_flags, iteration, total_tokens, deadlock, task_completed, interventions, active_policy, latest_intervention. Handles baseline and protected modes via use_sentinel and adaptive_interventions flags.",
+              "inputs": "task: str, coder_prompt: str, reviewer_prompt: str, use_sentinel: bool = True, adaptive_interventions: bool = True",
+              "outputs": "Generator yielding StreamEvent dicts",
+              "importance": 9
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "deadlock-detection",
+      "title": "Deadlock Detection Engine",
+      "type": "component",
+      "description": "Lightweight runtime signal analysis engine that detects 7 distinct deadlock patterns in multi-agent conversations using text similarity, latency analysis, token growth tracking, and pattern matching—without expensive LLM judges.",
+      "importance": 10,
+      "responsibilities": [
+        "Parse structured review STATUS from reviewer output",
+        "Detect exact repetition in coder/reviewer responses",
+        "Measure Jaccard similarity stagnation across agent turns",
+        "Track latency consistency as a stagnation signal",
+        "Detect open-ended question loops between reviewer and coder",
+        "Identify repeated STATUS: CHANGES_REQUIRED rejection cycles",
+        "Detect token escalation (rapid reviewer response growth)",
+        "Detect error loops (consecutive LLM failures)",
+        "Aggregate all signals into feature flags and make deadlock decisions"
+      ],
+      "children": [
+        {
+          "id": "file-monitor",
+          "title": "monitor.py",
+          "type": "file",
+          "relativePath": "monitor.py",
+          "lineCount": 333,
+          "purpose": "Core deadlock detection engine. Implements 7 detectors, unified flag update, and deadlock decision logic.",
+          "responsibilities": [
+            "Parse structured review status with regex (handles markdown variants)",
+            "Detect repetition via exact normalized text matching",
+            "Compute Jaccard similarity between agent responses",
+            "Detect stagnation using reviewer (0.72) and coder (0.82) similarity thresholds",
+            "Detect latency convergence (spread < 0.2s over 3 turns)",
+            "Detect open loops (reviewer ends with ?, coder agrees)",
+            "Detect rejection loops (consecutive CHANGES_REQUIRED + high similarity)",
+            "Detect token escalation (>30% growth, consecutive growth)",
+            "Detect error loops (2+ errors in last 3 messages)",
+            "Update feature flags and make hard/soft deadlock decisions"
+          ],
+          "dependsOn": [],
+          "children": [
+            {
+              "id": "fn-detect-review-status",
+              "title": "detect_review_status()",
+              "type": "function",
+              "description": "Parses the latest reviewer message for a structured STATUS line. Handles markdown variants (**STATUS:**, __STATUS__, `STATUS`) and returns 'approved', 'changes_required', or None.",
+              "inputs": "messages: List[dict]",
+              "outputs": "'approved' | 'changes_required' | None",
+              "importance": 10
+            },
+            {
+              "id": "fn-update-flag",
+              "title": "update_flag()",
+              "type": "function",
+              "description": "Orchestrator that runs all 7 detectors on updated messages and returns the current set of feature flags (llm_error, repeat, open_loop, latency, error_loop, stagnation, rejection_loop, escalation). Drops stale flags after each turn.",
+              "inputs": "flag: List[str], updated_messages: List[dict]",
+              "outputs": "List[str] of current flags",
+              "importance": 10
+            },
+            {
+              "id": "fn-is-deadlock",
+              "title": "is_deadlock()",
+              "type": "function",
+              "description": "Deadlock decision function. Hard signals (repeat, error_loop, open_loop, llm_error) single-handedly trigger deadlock. Soft+latency combos (stagnation+latency, rejection_loop+latency, weak_progress+latency) also trigger. Escalation + iteration >= 3 triggers. Latency alone is insufficient.",
+              "inputs": "state: AgentState",
+              "outputs": "bool",
+              "importance": 10
+            },
+            {
+              "id": "fn-detect-stagnation",
+              "title": "detect_stagnation()",
+              "type": "function",
+              "description": "Computes Jaccard similarity between consecutive reviewer messages (threshold 0.72) and consecutive coder messages (threshold 0.82). Returns True if either exceeds threshold.",
+              "inputs": "updated_messages: List[dict]",
+              "outputs": "bool",
+              "importance": 9
+            },
+            {
+              "id": "fn-detect-rejection-loop",
+              "title": "detect_rejection_loop()",
+              "type": "function",
+              "description": "Detects repeated rejection patterns. Checks for consecutive STATUS: CHANGES_REQUIRED with high similarity (>0.72), or explicit negative review language matches in both last two reviewer messages.",
+              "inputs": "messages: List[dict]",
+              "outputs": "bool",
+              "importance": 8
+            },
+            {
+              "id": "fn-detect-escalation",
+              "title": "detect_escalation()",
+              "type": "function",
+              "description": "Detects token escalation across reviewer responses. Flags if latest reviewer tokens > 130% of running average AND there are 2+ consecutive growth steps (>10%).",
+              "inputs": "messages: List[dict]",
+              "outputs": "bool",
+              "importance": 8
+            },
+            {
+              "id": "fn-detect-repetition",
+              "title": "detect_repetition()",
+              "type": "function",
+              "description": "Exact duplicate detection. True if the last two messages from the same sender (coder or reviewer) are identical after normalization.",
+              "inputs": "messages: List[dict]",
+              "outputs": "bool",
+              "importance": 7
+            },
+            {
+              "id": "fn-detect-latency",
+              "title": "detect_latency()",
+              "type": "function",
+              "description": "Checks if latency spread across last k=3 responses is below 0.2s threshold, indicating repetitive cached behavior.",
+              "inputs": "messages: List[dict], k=3, threshold=0.2",
+              "outputs": "bool",
+              "importance": 7
+            },
+            {
+              "id": "fn-detect-open-loops",
+              "title": "detect_open_loops()",
+              "type": "function",
+              "description": "Detects when the reviewer repeatedly asks open-ended questions (ending with ?) and coder agrees (yes, sure, etc.), indicating an unproductive question loop.",
+              "inputs": "messages: List[dict]",
+              "outputs": "bool",
+              "importance": 7
+            },
+            {
+              "id": "fn-detect-error-loop",
+              "title": "detect_error_loop()",
+              "type": "function",
+              "description": "Flags when 2+ of the last 3 messages contain LLM errors, indicating cascading failures.",
+              "inputs": "messages: List[dict]",
+              "outputs": "bool",
+              "importance": 7
+            },
+            {
+              "id": "fn-similarity",
+              "title": "similarity()",
+              "type": "function",
+              "description": "Computes Jaccard similarity between two texts after markdown noise removal, stopword filtering, and reviewer label stripping. Returns 0.0-1.0 float.",
+              "inputs": "a: str, b: str, sender: str | None",
+              "outputs": "float",
+              "importance": 8
+            },
+            {
+              "id": "fn-normalize-for-signal",
+              "title": "normalize_for_signal()",
+              "type": "function",
+              "description": "Normalizes agent content before similarity detection. Strips markdown, removes reviewer boilerplate labels (Category:, Severity:, etc.), filters stopwords, and returns lowercase space-joined significant words.",
+              "inputs": "text: str, sender: str | None",
+              "outputs": "str (normalized)",
+              "importance": 7
+            }
+          ]
+        },
+        {
+          "id": "file-test-parser",
+          "title": "test_parser.py",
+          "type": "file",
+          "relativePath": "test_parser.py",
+          "lineCount": 130,
+          "purpose": "Unit tests for detect_review_status, detect_rejection_loop, detect_stagnation, and update_flag with 30+ test cases covering edge cases.",
+          "responsibilities": [
+            "Validate STATUS regex against plain, bold, underscore, backtick variants",
+            "Test CHANGES_REQUIRED, APPROVED, MINOR_ISSUES, PENDING variants",
+            "Verify rejection_loop and stagnation against real-world review boilerplate",
+            "Test update_flag drops stale flags across turns"
+          ],
+          "dependsOn": ["monitor.py"],
+          "children": []
+        }
+      ]
+    },
+
+    {
+      "id": "adaptive-policy",
+      "title": "Adaptive Policy Engine",
+      "type": "component",
+      "description": "Runtime intervention system that selects from 5 guidance policies based on active deadlock flags. Applies targeted instructions to coder or reviewer agents, tracks recovery outcomes, and decides whether to terminate after repeated failed interventions.",
+      "importance": 10,
+      "responsibilities": [
+        "Define 5 intervention policies with targeted instructions (context_reduction, focused_revision, reviewer_deduplication, alternate_strategy, concise_delta)",
+        "Select highest-priority policy based on current flags",
+        "Apply cooldown logic (skip if same policy used within 2 iterations)",
+        "Record interventions with before/after metrics",
+        "Evaluate recovery by comparing metrics before and after guidance",
+        "Decide termination after failed interventions (max 2 failures or hard failure flags)"
+      ],
+      "children": [
+        {
+          "id": "file-policy-engine",
+          "title": "policy_engine.py",
+          "type": "file",
+          "relativePath": "policy_engine.py",
+          "lineCount": 247,
+          "purpose": "Complete adaptive intervention system: policy definitions, guidance builder, intervention recorder, recovery evaluator, and termination fallback logic.",
+          "responsibilities": [
+            "Define RuntimeGuidance dataclass with enabled, target_agent, trigger, policy, instruction, outcome",
+            "Define 5 policies: context_reduction (escalation→coder), focused_revision (stagnation→coder), reviewer_deduplication (rejection_loop→reviewer), alternate_strategy (repeat→coder), concise_delta (latency→coder)",
+            "Select highest-priority policy matching current flags and target agent",
+            "Apply cooldown: skip if same policy was applied within COOLDOWN_ITERATIONS=2 turns",
+            "Record intervention with before_metrics (similarity, tokens, issue mentions)",
+            "Evaluate recovery: check flag cleared, similarity reduced, issues reduced, tokens reduced",
+            "Terminate if hard failure flags present or failed interventions >= MAX_FAILED_INTERVENTIONS=2"
+          ],
+          "dependsOn": ["monitor.py"],
+          "children": [
+            {
+              "id": "cls-runtime-guidance",
+              "title": "RuntimeGuidance",
+              "type": "function",
+              "description": "Dataclass representing a single policy intervention. Fields: enabled, target_agent, trigger, policy, instruction, outcome. Has to_dict() serialization method.",
+              "inputs": "N/A (dataclass)",
+              "outputs": "N/A",
+              "importance": 8
+            },
+            {
+              "id": "fn-build-runtime-guidance",
+              "title": "build_runtime_guidance()",
+              "type": "function",
+              "description": "Policy selection engine. Iterates POLICY_PRIORITY (repeat > rejection_loop > stagnation > escalation > latency). Checks if trigger flag is present, matches target_agent, and is not in cooldown. Returns enabled RuntimeGuidance or skipped/disabled fallback.",
+              "inputs": "state: Dict[str, Any], target_agent: str | None",
+              "outputs": "RuntimeGuidance",
+              "importance": 10
+            },
+            {
+              "id": "fn-record-intervention",
+              "title": "record_intervention()",
+              "type": "function",
+              "description": "Records a new intervention in the state if guidance is enabled. Captures current iteration and before_metrics (similarity, tokens, issue mentions) for subsequent recovery evaluation.",
+              "inputs": "state: Dict[str, Any], guidance: RuntimeGuidance",
+              "outputs": "Dict with updated interventions and active_policy",
+              "importance": 8
+            },
+            {
+              "id": "fn-evaluate-recovery",
+              "title": "evaluate_recovery()",
+              "type": "function",
+              "description": "Evaluates whether a policy intervention improved the workflow state. Compares before/after metrics based on trigger type: repeat checks flag cleared, rejection/stagnation checks similarity and issue mentions reduced, escalation/latency checks tokens reduced. Updates outcome to 'recovered' or 'failed'.",
+              "inputs": "state: Dict, updated_state: Dict, target_agent: str",
+              "outputs": "Dict with updated interventions and cleared active_policy",
+              "importance": 9
+            },
+            {
+              "id": "fn-should-terminate-after-interventions",
+              "title": "should_terminate_after_interventions()",
+              "type": "function",
+              "description": "Termination fallback decision. Returns True if hard failure flags (error_loop, llm_error, open_loop) are present, or if MAX_FAILED_INTERVENTIONS (2) failed interventions have occurred.",
+              "inputs": "state: Dict[str, Any]",
+              "outputs": "bool",
+              "importance": 8
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "llm-inference",
+      "title": "LLM Inference",
+      "type": "component",
+      "description": "OpenAI-compatible LLM client configured for NVIDIA-hosted models (google/gemma-4-31b-it for the baseline workflow, poolside/laguna-xs-2.1 for the protected workflow). Manages dual API keys (baseline and protected), handles request/response with latency and token tracking.",
+      "importance": 9,
+      "responsibilities": [
+        "Initialize two OpenAI clients (baseline and protected) with NVIDIA API keys",
+        "Send chat completion requests with temperature 0.2, top_p 0.95, max_tokens 1024",
+        "Track latency, token usage, and completion tokens per request",
+        "Handle exceptions gracefully with error flag"
+      ],
+      "children": [
+        {
+          "id": "file-llm-client",
+          "title": "llm_client.py",
+          "type": "file",
+          "relativePath": "llm_client.py",
+          "lineCount": 66,
+          "purpose": "LLM client setup and request/response handler for NVIDIA-hosted models (google/gemma-4-31b-it / poolside/laguna-xs-2.1) via OpenAI SDK.",
+          "responsibilities": [
+            "Load API keys from .env or Streamlit secrets",
+            "Create baseline_client and protected_client OpenAI instances",
+            "Send chat completion requests and parse response"
+          ],
+          "dependsOn": [],
+          "children": [
+            {
+              "id": "fn-request-response",
+              "title": "request_response()",
+              "type": "function",
+              "description": "Core LLM call handler. Sends chat messages to the workflow's configured model (google/gemma-4-31b-it for baseline, poolside/laguna-xs-2.1 for protected) with temperature=0.2, top_p=0.95, max_tokens=1024. Returns (text, latency, total_tokens, completion_tokens, error_flag). Logs request messages and handles exceptions with graceful error return.",
+              "inputs": "history: List[dict], client: OpenAI",
+              "outputs": "Tuple[str | None, float | None, int, int, bool]",
+              "importance": 9
+            }
+          ]
+        },
+        {
+          "id": "file-prompt-builder",
+          "title": "prompt_builder.py",
+          "type": "file",
+          "relativePath": "prompt_builder.py",
+          "lineCount": 69,
+          "purpose": "Constructs chat histories and review requests with proper role alternation for the NVIDIA API (strict user/assistant alternation required).",
+          "responsibilities": [
+            "Build coder chat history with system prompt + runtime guidance injection",
+            "Maintain strict user/assistant role alternation for NVIDIA API compliance",
+            "Build stateless reviewer request as a single user message to avoid drift and alternation issues",
+            "Inject RuntimeGuidance section into prompts when available"
+          ],
+          "dependsOn": [],
+          "children": [
+            {
+              "id": "fn-build-history",
+              "title": "build_history()",
+              "type": "function",
+              "description": "Builds coder chat history. Pins first message as user with system prompt+task+optional guidance. Adds last 4 context messages with strict role alternation (assistant, user, assistant, user...). The NVIDIA API requires even message count ending in user.",
+              "inputs": "state: AgentState, system_prompt: str, runtime_guidance: dict | None",
+              "outputs": "List[dict] of messages",
+              "importance": 8
+            },
+            {
+              "id": "fn-build-reviewer-request",
+              "title": "build_reviewer_request()",
+              "type": "function",
+              "description": "Builds a stateless reviewer request as a single user message containing: reviewer prompt+guidance, original task, and latest coder implementation. Avoiding role alternation issues and reviewer drift from accumulated context.",
+              "inputs": "reviewer_prompt: str, task: str, latest_coder_output: str, runtime_guidance: dict | None",
+              "outputs": "List[dict] with single user message",
+              "importance": 8
+            }
+          ]
+        },
+        {
+          "id": "file-config",
+          "title": "config.py",
+          "type": "file",
+          "relativePath": "config.py",
+          "lineCount": 55,
+          "purpose": "System prompts for coder and reviewer agents, plus MAX_TURNS configuration.",
+          "responsibilities": [
+            "Define CODER system prompt (senior backend engineer, output-only implementation)",
+            "Define REVIEWER system prompt (production code review with STATUS protocol)",
+            "Set MAX_TURNS = 30 as the iteration limit"
+          ],
+          "dependsOn": [],
+          "children": [
+            {
+              "id": "const-coder",
+              "title": "CODER",
+              "type": "function",
+              "description": "Coder system prompt: instructs the agent to implement/revise code based on reviewer feedback, preserve functionality, and output only the updated code without explanations.",
+              "inputs": "N/A (constant)",
+              "outputs": "str",
+              "importance": 7
+            },
+            {
+              "id": "fn-reviewer",
+              "title": "REVIEWER",
+              "type": "function",
+              "description": "Reviewer system prompt: instructs the agent to evaluate implementation across 9 categories (correctness, coverage, error handling, API design, code quality, etc.), report issues with Category/Severity/Description/Suggested Fix, and output STATUS: APPROVED when requirements are satisfied.",
+              "inputs": "N/A (constant)",
+              "outputs": "str",
+              "importance": 7
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "dashboard-streamlit",
+      "title": "Streamlit Benchmark Dashboard",
+      "type": "component",
+      "description": "Streamlit dashboard that runs 3 concurrent workflow configurations (baseline, monitor-only, adaptive) and visualizes results with token charts, escalation charts, and live activity feeds.",
+      "importance": 8,
+      "responsibilities": [
+        "Display 3-column live feed: Baseline, Monitor Only, Adaptive Intervention",
+        "Run stream_single for each configuration sequentially",
+        "Build markdown feed rows showing sender, tokens, latency, flags, interventions",
+        "Compute metrics: token reduction %, turns saved, intervention recovery rate",
+        "Render Plotly bar/line charts for token and escalation comparison"
+      ],
+      "children": [
+        {
+          "id": "file-app-py",
+          "title": "app.py",
+          "type": "file",
+          "relativePath": "app.py",
+          "lineCount": 425,
+          "purpose": "Streamlit dashboard with 3-column benchmark workflow viewer, live feeds, metric cards, and Plotly charts.",
+          "responsibilities": [
+            "Configure page with custom dark CSS styling",
+            "Provide sidebar: about section, detection signal explanations, benchmark goal",
+            "Provide collapsible prompt configuration section",
+            "Run 3 workflows sequentially and display live feeds",
+            "Compute and display saved tokens, turns, intervention recovery stats",
+            "Render tokens-per-turn bar chart and reviewer escalation line chart"
+          ],
+          "dependsOn": ["runner.py", "config.py"],
+          "children": [
+            {
+              "id": "fn-build-feed-md",
+              "title": "build_feed_md()",
+              "type": "function",
+              "description": "Builds a markdown string for the live feed. Each row shows agent sender icon, turn number, tokens, latency, new flag badges, and deadlock/termination indicators. Also renders runtime guidance intervention badges.",
+              "inputs": "rows: List[dict]",
+              "outputs": "str (markdown)",
+              "importance": 6
+            },
+            {
+              "id": "fn-tokens-by-turn",
+              "title": "tokens_by_turn()",
+              "type": "function",
+              "description": "Aggregates tokens per turn from workflow event rows for chart rendering.",
+              "inputs": "rows: List[dict]",
+              "outputs": "Dict[int, int]",
+              "importance": 4
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "backend-websocket",
+      "title": "FastAPI Backend Server",
+      "type": "component",
+      "description": "FastAPI WebSocket server that runs 3 workflow configurations concurrently and streams real-time events and logs to the Next.js frontend.",
+      "importance": 8,
+      "responsibilities": [
+        "Accept WebSocket connections at /ws",
+        "Receive start command with task and prompts",
+        "Run 3 workflows concurrently via asyncio.gather: baseline (no detector), monitor_only (detector stops), protected (adaptive interventions)",
+        "Stream per-turn events and debug logs via WebSocket JSON messages",
+        "Send completion summaries with metrics",
+        "Serve /health and /version endpoints"
+      ],
+      "children": [
+        {
+          "id": "file-backend-main",
+          "title": "main.py",
+          "type": "file",
+          "relativePath": "backend/main.py",
+          "lineCount": 188,
+          "purpose": "FastAPI WebSocket server managing benchmark workflows and streaming real-time data.",
+          "responsibilities": [
+            "Configure CORS for localhost and Vercel deployment",
+            "Accept /ws WebSocket connections and orchestrate 3 concurrent workflows",
+            "Stream per-turn events and drained log lines to connected clients",
+            "Build and send final WorkflowSummary for each configuration",
+            "Serve GET /, /health, /version with git metadata and debug inspection"
+          ],
+          "dependsOn": ["runner.py", "config.py", "log_utils.py"],
+          "children": [
+            {
+              "id": "fn-websocket-endpoint",
+              "title": "websocket_endpoint()",
+              "type": "function",
+              "description": "WebSocket handler at /ws. Accepts connection, waits for 'start' message with task and prompts, runs 3 workflows concurrently via asyncio.gather (baseline, monitor_only, protected), and streams events/logs. Handles WebSocket disconnect and exceptions.",
+              "inputs": "websocket: WebSocket",
+              "outputs": "None (streams JSON over WebSocket)",
+              "importance": 9
+            },
+            {
+              "id": "fn-run-workflow",
+              "title": "run_workflow()",
+              "type": "function",
+              "description": "Async function that runs a single workflow via stream_single() in a thread pool executor. Streams per-turn events as JSON, drains stdout logs, and sends final summary. Handles errors gracefully with fallback summary.",
+              "inputs": "websocket: WebSocket, workflow_id: str, task: str, coder_prompt: str, reviewer_prompt: str, use_sentinel: bool, adaptive_interventions: bool",
+              "outputs": "None (streams JSON over WebSocket)",
+              "importance": 9
+            }
+          ]
+        },
+        {
+          "id": "file-log-utils",
+          "title": "log_utils.py",
+          "type": "file",
+          "relativePath": "log_utils.py",
+          "lineCount": 45,
+          "purpose": "Thread-safe stdout capture utility that intercepts print() calls and buffers them for WebSocket streaming.",
+          "responsibilities": [
+            "Replace sys.stdout with a thread-safe capturing wrapper",
+            "Pass through writes to original stdout while buffering",
+            "Provide drain() to retrieve and clear buffered logs"
+          ],
+          "dependsOn": [],
+          "children": [
+            {
+              "id": "fn-install",
+              "title": "install()",
+              "type": "function",
+              "description": "Installs the stdout capture. Replaces sys.stdout with a _Capture instance that buffers all output and forwards to original stdout.",
+              "inputs": "None",
+              "outputs": "None",
+              "importance": 5
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "frontend-nextjs",
+      "title": "Next.js Frontend",
+      "type": "component",
+      "description": "TypeScript React application with Tailwind dark theme. Provides real-time workflow monitoring with WebSocket connection management, 3-column workflow panels, Recharts visualization, and CSV export.",
+      "importance": 8,
+      "responsibilities": [
+        "Connect to FastAPI server via WebSocket at /ws",
+        "Manage 3 concurrent workflow states (baseline, monitor_only, protected)",
+        "Display per-turn feed rows with agent, tokens, latency, flags, and intervention badges",
+        "Render Recharts bar chart (tokens per turn) and line chart (reviewer escalation)",
+        "Render benchmark results with metric cards, intervention history, recovery stats",
+        "Export benchmark results as CSV with per-turn detail"
+      ],
+      "children": [
+        {
+          "id": "file-types",
+          "title": "types/index.ts",
+          "type": "file",
+          "relativePath": "frontend/src/types/index.ts",
+          "lineCount": 65,
+          "purpose": "All TypeScript interfaces for the frontend: MessageData, StreamEvent, WorkflowSummary, WorkflowState, LogEntry, RuntimeIntervention.",
+          "responsibilities": [
+            "Type workflow event data flowing from WebSocket",
+            "Define per-message structure, per-event structure, summary structure, and intervention structure"
+          ],
+          "dependsOn": [],
+          "children": []
+        },
+        {
+          "id": "file-use-benchmark",
+          "title": "lib/useBenchmark.ts",
+          "type": "file",
+          "relativePath": "frontend/src/lib/useBenchmark.ts",
+          "lineCount": 243,
+          "purpose": "React hook managing WebSocket lifecycle, 3 workflow states, log ingestion, and connection fallback.",
+          "responsibilities": [
+            "Manage WebSocket open/send/onmessage/onerror/onclose lifecycle",
+            "Route per-workflow events to correct state (baseline, monitor_only, protected)",
+            "Ingest debug logs with auto-incrementing IDs",
+            "Handle incomplete connections with graceful summary fallback"
+          ],
+          "dependsOn": [],
+          "children": [
+            {
+              "id": "fn-use-benchmark",
+              "title": "useBenchmark()",
+              "type": "function",
+              "description": "React hook that returns 3 WorkflowState objects (baseline, monitorOnly, protected), running flag, start callback, and logs array. Manages WebSocket connection, dispatches events to workflow states, handles connection loss with fallback summaries.",
+              "inputs": "None (returns hook state)",
+              "outputs": "Object with baseline, monitorOnly, protected, running, start, task, coderPrompt, reviewerPrompt, logs",
+              "importance": 9
+            }
+          ]
+        },
+        {
+          "id": "file-export-csv",
+          "title": "lib/exportCSV.ts",
+          "type": "file",
+          "relativePath": "frontend/src/lib/exportCSV.ts",
+          "lineCount": 175,
+          "purpose": "Generates and downloads CSV benchmark results with per-turn data and summary metrics.",
+          "responsibilities": [
+            "Generate CSV header with task config, summary metrics (tokens, turns, reduction, interventions)",
+            "Append per-turn rows for baseline and protected workflows",
+            "Trigger browser CSV file download with formatted filename"
+          ],
+          "dependsOn": [],
+          "children": [
+            {
+              "id": "fn-generate-csv",
+              "title": "generateCSV()",
+              "type": "function",
+              "description": "Generates a complete CSV string from baseline and protected workflow states. Includes summary section (task, prompts, token/turn metrics, intervention stats) and per-turn rows for both workflows.",
+              "inputs": "baseline: WorkflowState, protectedState: WorkflowState, task: str, coderPrompt: str, reviewerPrompt: str",
+              "outputs": "str (CSV)",
+              "importance": 7
+            },
+            {
+              "id": "fn-download-csv",
+              "title": "downloadCSV()",
+              "type": "function",
+              "description": "Triggers browser download of CSV file via dynamically created anchor element with Blob URL.",
+              "inputs": "csvString: string",
+              "outputs": "void",
+              "importance": 5
+            }
+          ]
+        },
+        {
+          "id": "file-benchmark-results",
+          "title": "components/BenchmarkResults.tsx",
+          "type": "file",
+          "relativePath": "frontend/src/components/BenchmarkResults.tsx",
+          "lineCount": 322,
+          "purpose": "Full results section: metric cards, intervention history grid, CSV export button with toast notification, and Recharts integration.",
+          "responsibilities": [
+            "Compute token reduction %, tokens/turns saved from baseline vs protected summaries",
+            "Display 3 workflow stat cards (tokens, turns) and 3 comparison metric cards",
+            "Render intervention history grid with per-intervention outcome coloring",
+            "Integrate TokenChart and ReviewerChart Recharts components",
+            "Export CSV with loading spinner and toast notification"
+          ],
+          "dependsOn": ["lib/exportCSV.ts", "components/TokenChart.tsx", "components/ReviewerChart.tsx"],
+          "children": [
+            {
+              "id": "fn-handle-export",
+              "title": "handleExport()",
+              "type": "function",
+              "description": "CSV export handler with debounce, loading state management, and toast notification for success/error outcomes.",
+              "inputs": "None (closure over props)",
+              "outputs": "Promise<void>",
+              "importance": 5
+            }
+          ]
+        },
+        {
+          "id": "file-workflow-panel",
+          "title": "components/WorkflowPanel.tsx",
+          "type": "file",
+          "relativePath": "frontend/src/components/WorkflowPanel.tsx",
+          "lineCount": 110,
+          "purpose": "Per-workflow column component showing status indicator, live feed of events, and summary footer.",
+          "responsibilities": [
+            "Render status indicator with color-coded dot (green=complete, red=deadlock, blue=running)",
+            "Render scrollable FeedRow list from workflow rows",
+            "Display summary footer with turns, tokens, flags, and intervention recovery stats"
+          ],
+          "dependsOn": ["components/FeedRow.tsx"],
+          "children": []
+        },
+        {
+          "id": "file-feed-row",
+          "title": "components/FeedRow.tsx",
+          "type": "file",
+          "relativePath": "frontend/src/components/FeedRow.tsx",
+          "lineCount": 82,
+          "purpose": "Single event row in the workflow feed showing sender, turn number, tokens, latency, flags, and intervention badges.",
+          "responsibilities": [
+            "Display sender with color-coded dot (green=coder, blue=reviewer, red=deadlock)",
+            "Show token count, latency, turn number",
+            "Render new_flag pills and runtime guidance intervention badges"
+          ],
+          "dependsOn": [],
+          "children": []
+        },
+        {
+          "id": "file-token-chart",
+          "title": "components/TokenChart.tsx",
+          "type": "file",
+          "relativePath": "frontend/src/components/TokenChart.tsx",
+          "lineCount": 92,
+          "purpose": "Recharts bar chart comparing tokens per turn between baseline (red) and adaptive (green) workflows.",
+          "responsibilities": [
+            "Aggregate tokens by turn number from StreamEvent rows",
+            "Render grouped bar chart with ResponsiveContainer"
+          ],
+          "dependsOn": [],
+          "children": []
+        },
+        {
+          "id": "file-reviewer-chart",
+          "title": "components/ReviewerChart.tsx",
+          "type": "file",
+          "relativePath": "frontend/src/components/ReviewerChart.tsx",
+          "lineCount": 107,
+          "purpose": "Recharts line chart showing reviewer response size over turns as an escalation signal indicator.",
+          "responsibilities": [
+            "Filter reviewer-only events and map by reviewer turn number",
+            "Render line chart comparing baseline vs protected reviewer token growth"
+          ],
+          "dependsOn": [],
+          "children": []
+        },
+        {
+          "id": "file-config-section",
+          "title": "components/ConfigSection.tsx",
+          "type": "file",
+          "relativePath": "frontend/src/components/ConfigSection.tsx",
+          "lineCount": 95,
+          "purpose": "Collapsible configuration form with task, coder prompt, and reviewer prompt text areas and Run button.",
+          "responsibilities": [
+            "Manage task, coder prompt, and reviewer prompt state",
+            "Collapsible section UI with default prompt values",
+            "Trigger benchmark start with onStart callback"
+          ],
+          "dependsOn": [],
+          "children": []
+        },
+        {
+          "id": "file-log-panel",
+          "title": "components/LogPanel.tsx",
+          "type": "file",
+          "relativePath": "frontend/src/components/LogPanel.tsx",
+          "lineCount": 141,
+          "purpose": "Collapsible debug log viewer with auto-scroll, workflow-colored tags, and text file export.",
+          "responsibilities": [
+            "Display workflow-colored log entries with timestamps",
+            "Auto-scroll to bottom on new entries",
+            "Provide download logs as .txt file"
+          ],
+          "dependsOn": [],
+          "children": []
+        },
+        {
+          "id": "file-page",
+          "title": "app/page.tsx",
+          "type": "file",
+          "relativePath": "frontend/src/app/page.tsx",
+          "lineCount": 55,
+          "purpose": "Main page composing all frontend components into the 3-column layout.",
+          "responsibilities": [
+            "Compose ConfigSection, 3x WorkflowPanel, LogPanel, and BenchmarkResults",
+            "Wire useBenchmark hook state and callbacks to child components"
+          ],
+          "dependsOn": [
+            "lib/useBenchmark.ts",
+            "components/ConfigSection.tsx",
+            "components/WorkflowPanel.tsx",
+            "components/BenchmarkResults.tsx",
+            "components/LogPanel.tsx"
+          ],
+          "children": []
+        }
+      ]
+    }
+  ],
+
+  "edges": [
+    {
+      "source": "agent-orchestration",
+      "target": "llm-inference",
+      "label": "builds prompts → sends to LLM"
+    },
+    {
+      "source": "agent-orchestration",
+      "target": "deadlock-detection",
+      "label": "turns → flags, deadlock decisions"
+    },
+    {
+      "source": "agent-orchestration",
+      "target": "adaptive-policy",
+      "label": "flags → selects guidance policy"
+    },
+    {
+      "source": "deadlock-detection",
+      "target": "adaptive-policy",
+      "label": "flags, metrics → policy input"
+    },
+    {
+      "source": "adaptive-policy",
+      "target": "agent-orchestration",
+      "label": "RuntimeGuidance → prompt injection"
+    },
+    {
+      "source": "agent-orchestration",
+      "target": "dashboard-streamlit",
+      "label": "stream_single() events → live feed"
+    },
+    {
+      "source": "agent-orchestration",
+      "target": "backend-websocket",
+      "label": "stream_single() events → WebSocket broadcast"
+    },
+    {
+      "source": "dashboard-streamlit",
+      "target": "agent-orchestration",
+      "label": "user task/prompts → stream_single() input"
+    },
+    {
+      "source": "backend-websocket",
+      "target": "frontend-nextjs",
+      "label": "WebSocket JSON → useBenchmark hook"
+    },
+    {
+      "source": "frontend-nextjs",
+      "target": "backend-websocket",
+      "label": "start command with task + prompts → /ws"
+    },
+    {
+      "source": "backend-websocket",
+      "target": "llm-inference",
+      "label": "uses clients NVIDIA API calls"
+    }
+  ]
+}

@@ -18,7 +18,7 @@ def build_history(state, system_prompt, runtime_guidance=None):
       2. Recent conversation context (last 4 messages, task excluded),
          with roles strictly alternating: assistant, user, assistant, user, ...
 
-    The NVIDIA API with Gemma-2-2b-it enforces strict alternation of
+    The NVIDIA API enforces strict alternation of
     user/assistant roles. The coder context always has an even number of
     messages, so alternation always ends with 'user'.
     """
