@@ -63,9 +63,17 @@ export default function BenchmarkResults({
   const hasBoth = !!baseline.summary && !!protectedState.summary;
   const hasResults = !running && hasCharts;
 
-  const tokensSaved = bs.total_tokens - ps.total_tokens;
-  const turnsSaved = bs.turns - ps.turns;
-  const pctSaved = bs.total_tokens > 0 ? (tokensSaved / bs.total_tokens) * 100 : 0;
+  // Protected rows are only the new adaptive turns; the replayed seed history is
+  // baked into ps.total_tokens/ps.turns, so charge the protected run only its
+  // fresh work to keep the comparison fair against baseline.
+  const detected = protectedState.rows.length > 0;
+  const freshTokens = protectedState.rows.reduce((sum, r) => sum + (r.message.tokens ?? 0), 0);
+  const freshTurns = protectedState.rows.length;
+  const tokensSaved = detected ? bs.total_tokens - freshTokens : 0;
+  const turnsSaved = detected ? bs.turns - freshTurns : 0;
+  const turnReductionPct = detected && bs.turns > 0 ? (turnsSaved / bs.turns) * 100 : 0;
+  const pctSaved = detected && bs.total_tokens > 0 ? (tokensSaved / bs.total_tokens) * 100 : 0;
+  const savedTurns = detected ? freshTurns : bs.turns;
 
   const showToast = useCallback((message: string, type: "success" | "error") => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -195,13 +203,13 @@ export default function BenchmarkResults({
         <div className="grid grid-cols-3 gap-4">
           <div className="rounded-xl border border-charcoal-700 bg-[#181818] p-5">
             <div className="text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider">
-              Token Reduction
+              Turn Reduction
             </div>
             <div className="text-3xl font-bold" style={{ color: "#f59e0b" }}>
-              {pctSaved.toFixed(0)}%
+              {turnReductionPct.toFixed(0)}%
             </div>
             <div className="text-xs text-gray-500 mt-1.5 leading-relaxed">
-              Saved {tokensSaved.toLocaleString()} tokens across {turnsSaved} turns
+              {bs.turns} &rarr; {savedTurns} turns
             </div>
           </div>
           <div className="rounded-xl border border-charcoal-700 bg-[#181818] p-5">
@@ -223,7 +231,7 @@ export default function BenchmarkResults({
               {turnsSaved}
             </div>
             <div className="text-xs text-gray-500 mt-1.5 leading-relaxed">
-              {bs.turns} &rarr; {ps.turns} turns
+              {bs.turns} &rarr; {savedTurns} turns
             </div>
           </div>
         </div>

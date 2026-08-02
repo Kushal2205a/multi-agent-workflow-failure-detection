@@ -83,10 +83,17 @@ export function generateCSV(
       : 0,
   };
 
-  const tokensSaved = bs.total_tokens - ps.total_tokens;
-  const turnsSaved = bs.turns - ps.turns;
+  const detected = protectedState.rows.length > 0;
+  const freshTokens = protectedState.rows.reduce((sum, r) => sum + (r.message.tokens ?? 0), 0);
+  const freshTurns = protectedState.rows.length;
+  const tokensSaved = detected ? bs.total_tokens - freshTokens : 0;
+  const turnsSaved = detected ? bs.turns - freshTurns : 0;
+  const turnReductionPct =
+    detected && bs.turns > 0
+      ? ((turnsSaved / bs.turns) * 100).toFixed(1)
+      : "0.0";
   const pctSaved =
-    bs.total_tokens > 0
+    detected && bs.total_tokens > 0
       ? ((tokensSaved / bs.total_tokens) * 100).toFixed(1)
       : "0.0";
   const detectorTriggered = ps.deadlock ? "Yes" : "No";
@@ -102,11 +109,13 @@ export function generateCSV(
   lines.push(`Timestamp,${timestamp}`);
   lines.push(`Baseline Tokens,${bs.total_tokens}`);
   lines.push(`Protected Tokens,${ps.total_tokens}`);
+  lines.push(`Protected Fresh Tokens,${freshTokens}`);
   lines.push(`Tokens Saved,${tokensSaved}`);
   lines.push(`Token Reduction Percentage,${pctSaved}%`);
   lines.push(`Baseline Turns,${bs.turns}`);
   lines.push(`Protected Turns,${ps.turns}`);
   lines.push(`Turns Saved,${turnsSaved}`);
+  lines.push(`Turn Reduction Percentage,${turnReductionPct}%`);
   lines.push(`Detector Triggered,${detectorTriggered}`);
   lines.push(`Trigger Reason,${triggerReason}`);
   lines.push(`Task Completed,${bs.task_completed ? "Yes" : "No"}`);
