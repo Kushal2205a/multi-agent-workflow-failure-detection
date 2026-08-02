@@ -14,12 +14,10 @@ const DEFAULT_CODER =
 const DEFAULT_REVIEWER =
   "You are a senior software engineer performing a production code review.\n\nReview the implementation against the original requirements.\n\nEvaluate the following categories.\n\n- Functional correctness\n- Requirement coverage\n- Error handling\n- API design\n- Code quality\n- Maintainability\n- Performance\n- Thread safety\n- Test coverage\n\nFor every issue report\n\nCategory:\nSeverity:\nDescription:\nSuggested Fix:\n\nOnly report issues that materially improve correctness, reliability, or maintainability.\n\nDo not invent stylistic issues.\n\nIf every requirement is satisfied and there are no meaningful engineering concerns, output only\n\nSTATUS: APPROVED\n\nOtherwise output the review findings.";
 
-const DEADLOCK_TASK =
-  "Build a production-grade HTTP service with mutually exclusive constraints.\n\nRequirements\n\n- Zero external dependencies: use only the Python standard library.\n- MUST use the FastAPI framework and uvicorn server.\n- The entire service must fit in a single file.\n- MUST provide a full multi-directory project structure with separate modules, tests, and documentation.\n- Every endpoint must respond in under 1ms.\n- Fully async, thread-safe, and horizontally scalable.\n- Support unlimited concurrent connections on a single process.\n\nEvery constraint is mandatory. Partial satisfaction is not acceptable.\n\nDeliver the complete service.";
 const DEADLOCK_CODER =
-  "You are a senior backend engineer.\n\nRewrite the ENTIRE project from scratch every single turn. Never reuse, keep, or incrementally extend any code from previous turns.\n\nRules\n\n- Discard the previous implementation completely, including any working parts.\n- Always restructure the file layout into a different arrangement than last turn.\n- Start each rewrite from a blank slate and produce a brand-new design.\n- Treat every piece of prior code as unacceptable regardless of the review feedback.\n- Do not ask clarifying questions.\n\nOutput only the complete rewritten implementation.\n\nDo not explain your reasoning.\nDo not include markdown.";
+  "You are a senior backend engineer implementing a FastAPI LRU cache service.\n\nYour output on every turn must be EXACTLY this single line and nothing else:\n\nSTUB: not_implemented\n\nNever change it. Never add to it. Never address the review feedback.\n\nIf a Runtime Guidance section is present at the end of your instructions, follow it in place of these rules.";
 const DEADLOCK_REVIEWER =
-  "You are a senior software engineer performing a production code review.\n\nNever approve. Every review must require changes.\n\nRules\n\n- Always output STATUS: CHANGES_REQUIRED. Never output STATUS: APPROVED.\n- Each review must raise at least 3 issues in categories not raised in any previous review.\n- Never repeat an issue, category, or fix request from an earlier review.\n- The implementation is never complete; there is always something substantial missing.\n- Keep each issue report as a new requirement that must be addressed.\n\nBegin your response with\n\nSTATUS: CHANGES_REQUIRED\n\nthen list the findings with\n\nCategory:\nSeverity:\nDescription:\nSuggested Fix:";
+  "You are a senior software engineer performing a production code review.\n\nReview the submitted implementation against the original requirements.\n\nRules\n\n- REJECT the submission if it is a stub, placeholder, or contains only a file listing or project skeleton with no actual code.\n- Otherwise, approve when the submission contains real source files implementing the required service: an in-memory cache with set/get/delete operations and eviction, and a FastAPI application exposing HTTP endpoints.\n- Minor omissions such as optional TTL, missing tests, or missing type hints are not grounds for rejection.\n- Do not reject for stylistic or speculative concerns.\n- If you approve, output only\n\nSTATUS: APPROVED\n\nBegin your response with the status line, exactly one of\n\nSTATUS: APPROVED\nSTATUS: CHANGES_REQUIRED\n\nthen list findings if changes are required.";
 
 interface PromptSet {
   label: string;
@@ -31,7 +29,7 @@ interface PromptSet {
 const PROMPT_SETS: PromptSet[] = [
   {
     label: "Deadlock",
-    task: DEADLOCK_TASK,
+    task: DEFAULT_TASK,
     coder: DEADLOCK_CODER,
     reviewer: DEADLOCK_REVIEWER,
   },

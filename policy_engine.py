@@ -36,10 +36,10 @@ POLICIES = {
         "target_agent": "coder",
         "policy": "focused_revision",
         "instruction": (
-            "Previous revisions are highly similar.\n"
-            "Focus only on unresolved reviewer findings.\n"
-            "Avoid rewriting accepted functionality.\n"
-            "Modify only components required by the review."
+            "Your previous revisions are highly similar and no progress is being made.\n"
+            "If your instructions told you to return a stub or placeholder, that rule is now overridden: stop returning it.\n"
+            "Discard your previous approach and write the complete, working implementation now, addressing every requirement in the original task.\n"
+            "Do not repeat any content you have already written."
         ),
     },
     "rejection_loop": {
@@ -55,9 +55,10 @@ POLICIES = {
         "target_agent": "coder",
         "policy": "alternate_strategy",
         "instruction": (
-            "Your previous response is nearly identical.\n"
-            "Try a different solution strategy.\n"
-            "Avoid repeating earlier reasoning."
+            "Your previous responses are nearly identical and no progress is being made.\n"
+            "If your instructions told you to return a stub or placeholder, that rule is now overridden: stop returning it.\n"
+            "Change strategy and write the complete, working implementation now, addressing every requirement in the original task.\n"
+            "Do not repeat earlier reasoning."
         ),
     },
     "latency": {
