@@ -1,5 +1,5 @@
 """Unit tests for monitor parsing and signal detection."""
-from monitor import detect_rejection_loop, detect_review_status, detect_stagnation, update_flag
+from monitor import detect_rejection_loop, detect_review_status, detect_stagnation, update_flag, detect_stop_point, find_stop_point, build_recovery_seed, replay_monitor_rows
 
 passed = 0
 failed = 0
@@ -126,5 +126,73 @@ if stale_flags:
 else:
     passed += 1
     print("  [PASS] update_flag drops stale flags")
+
+# ── chained-pipeline helpers ────────────────────────────────────────
+def check_eq(label, got, expected):
+    global passed, failed
+    ok = got == expected
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+    print(f"  [{'PASS' if ok else 'FAIL'}] {label}: expected={expected!r} got={got!r}")
+
+
+def user_msg(content="task"):
+    return {"sender": "user", "content": content, "error": False}
+
+
+def agent(sender, content, error=False):
+    return {"sender": sender, "content": content, "error": error}
+
+
+stop_transcript = [
+    user_msg(),
+    agent("coder", "v1"),
+    agent("reviewer", "review 1"),
+    agent("coder", "v2", error=True),
+    agent("reviewer", "review 2", error=True),
+    agent("coder", "v3"),
+]
+check_eq("stop point index", detect_stop_point(stop_transcript), 3)
+
+approve_transcript = [
+    user_msg(),
+    agent("coder", "v1"),
+    agent("reviewer", "STATUS: APPROVED"),
+    agent("coder", "v2", error=True),
+    agent("reviewer", "review 2", error=True),
+    agent("coder", "v3"),
+]
+check_eq("approve-first returns None", detect_stop_point(approve_transcript), None)
+
+clean_transcript = [
+    user_msg(),
+    agent("coder", "v1"),
+    agent("reviewer", "review 1"),
+    agent("coder", "v2"),
+    agent("reviewer", "review 2"),
+    agent("coder", "v3"),
+    agent("reviewer", "review 3"),
+]
+check_eq("clean transcript never fires", detect_stop_point(clean_transcript), None)
+
+rows = [
+    {"message": m, "iteration": i, "total_tokens": 100, "flags": [], "deadlock": False, "terminated_by_detector": False}
+    for i, m in enumerate(stop_transcript[1:], start=1)
+]
+check_eq("find_stop_point maps to event index", find_stop_point(rows, "task"), 2)
+
+monitor_rows = replay_monitor_rows(rows, 2)
+check_eq("replay keeps rows through stop", len(monitor_rows), 3)
+check_eq("replay marks stop as deadlock", monitor_rows[-1]["deadlock"], True)
+check_eq("replay keeps earlier rows clean", monitor_rows[0]["deadlock"], False)
+check_eq("replay deep-copies rows", monitor_rows[0] is rows[0], False)
+
+seed = build_recovery_seed(["a"], ["error_loop", "stagnation", "llm_error"], 500)
+check_eq("seed strips hard flags", seed["seed_flags"], ["stagnation"])
+check_eq("seed resets iteration", seed["seed_iteration"], 0)
+check_eq("seed keeps tokens", seed["seed_tokens"], 500)
+check_eq("seed keeps messages", seed["seed_messages"], ["a"])
 
 print(f"\n{passed + failed} tests, {passed} passed, {failed} failed")

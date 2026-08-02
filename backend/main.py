@@ -13,6 +13,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from runner import stream_single
+from monitor import find_stop_point, build_recovery_seed, replay_monitor_rows
 from config import CODER, REVIEWER
 
 app = FastAPI(title="Deadlock Orchestrator Benchmark")
@@ -35,72 +36,98 @@ def _safe_next(gen):
         return None
 
 
-async def run_workflow(
-    websocket: WebSocket,
-    workflow_id: str,
-    task: str,
-    coder_prompt: str,
-    reviewer_prompt: str,
-    use_sentinel: bool,
-    adaptive_interventions: bool = True,
-):
-    summary = None
+def _summary(workflow_id, rows, deadlock=None, reason=None, turns=None):
+    last = rows[-1] if rows else None
+    if deadlock is None:
+        deadlock = any(r.get("deadlock") for r in rows) if workflow_id != "baseline" else False
+    if turns is None:
+        turns = last["iteration"] if last else 0
+    interventions = last.get("interventions", []) if last else []
+    return {
+        "total_tokens": last["total_tokens"] if last else 0,
+        "turns": turns,
+        "deadlock": deadlock,
+        "flags": last["flags"] if last else [],
+        "task_completed": last.get("task_completed", False) if last else False,
+        "completion_turn": last.get("completion_turn", 0) if last else 0,
+        "completion_reason": reason if reason is not None else (last.get("completion_reason", "max_iterations") if last else ""),
+        "terminated_by_detector": deadlock,
+        "interventions": interventions,
+        "interventions_applied": sum(1 for i in interventions if i.get("outcome") != "skipped"),
+        "successful_recoveries": sum(1 for i in interventions if i.get("outcome") == "recovered"),
+    }
+
+
+async def _run_stream(websocket, workflow_id, gen):
+    loop = asyncio.get_running_loop()
+    rows = []
+    while True:
+        result = await loop.run_in_executor(executor, _safe_next, gen)
+        if result is None:
+            break
+        rows.append(result)
+        await websocket.send_json({"type": "event", "workflow": workflow_id, "data": result})
+        logs = log_utils.drain()
+        if logs.strip():
+            await websocket.send_json({"type": "log", "workflow": workflow_id, "data": logs.rstrip("\n")})
+    return rows
+
+
+async def _complete(websocket, workflow_id, summary):
     try:
-        gen = stream_single(task, coder_prompt, reviewer_prompt, use_sentinel, adaptive_interventions)
-        loop = asyncio.get_running_loop()
-        rows = []
-
-        while True:
-            result = await loop.run_in_executor(executor, _safe_next, gen)
-            if result is None:
-                break
-            rows.append(result)
-            await websocket.send_json({"type": "event", "workflow": workflow_id, "data": result})
-            logs = log_utils.drain()
-            if logs.strip():
-                await websocket.send_json({"type": "log", "workflow": workflow_id, "data": logs.rstrip("\n")})
-            if result["deadlock"]:
-                break
-
-        summary = {
-            "total_tokens": rows[-1]["total_tokens"] if rows else 0,
-            "turns": rows[-1]["iteration"] if rows else 0,
-            "deadlock": any(r.get("deadlock") for r in rows) if workflow_id != "baseline" else False,
-            "flags": rows[-1]["flags"] if rows else [],
-            "task_completed": rows[-1].get("task_completed", False) if rows else False,
-            "completion_turn": rows[-1].get("completion_turn", 0) if rows else 0,
-            "completion_reason": rows[-1].get("completion_reason", "max_iterations") if rows else "",
-            "terminated_by_detector": any(r.get("deadlock") for r in rows) if workflow_id != "baseline" else False,
-            "interventions": rows[-1].get("interventions", []) if rows else [],
-            "interventions_applied": sum(1 for i in (rows[-1].get("interventions", []) if rows else []) if i.get("outcome") != "skipped"),
-            "successful_recoveries": sum(1 for i in (rows[-1].get("interventions", []) if rows else []) if i.get("outcome") == "recovered"),
-        }
-    except Exception as e:
-        print(f"[{workflow_id}] Error: {type(e).__name__}: {e}")
-        last = rows[-1] if rows else None
-        summary = {
-            "total_tokens": last["total_tokens"] if last else 0,
-            "turns": last["iteration"] if last else 0,
-            "deadlock": any(r.get("deadlock") for r in rows) if workflow_id != "baseline" and rows else False,
-            "flags": last["flags"] if last else [],
-            "error": str(e),
-            "task_completed": last.get("task_completed", False) if last else False,
-            "completion_turn": last.get("completion_turn", 0) if last else 0,
-            "completion_reason": last.get("completion_reason", "error") if last else "error",
-            "terminated_by_detector": any(r.get("deadlock") for r in rows) if workflow_id != "baseline" and rows else False,
-            "interventions": last.get("interventions", []) if last else [],
-            "interventions_applied": sum(1 for i in (last.get("interventions", []) if last else []) if i.get("outcome") != "skipped"),
-            "successful_recoveries": sum(1 for i in (last.get("interventions", []) if last else []) if i.get("outcome") == "recovered"),
-        }
-
-    try:
-        if summary is not None:
-            await websocket.send_json({"type": "complete", "workflow": workflow_id, "data": summary})
-            logs = log_utils.drain()
-            if logs.strip():
-                await websocket.send_json({"type": "log", "workflow": workflow_id, "data": logs.rstrip("\n")})
+        await websocket.send_json({"type": "complete", "workflow": workflow_id, "data": summary})
+        logs = log_utils.drain()
+        if logs.strip():
+            await websocket.send_json({"type": "log", "workflow": workflow_id, "data": logs.rstrip("\n")})
     except Exception:
         pass
+
+
+async def run_benchmark(websocket: WebSocket, task: str, coder_prompt: str, reviewer_prompt: str):
+    # Stage 1: baseline (detector never fires, runs to approval or MAX_TURNS).
+    try:
+        rows1 = await _run_stream(
+            websocket, "baseline",
+            stream_single(task, coder_prompt, reviewer_prompt, use_sentinel=False, adaptive_interventions=False),
+        )
+        await _complete(websocket, "baseline", _summary("baseline", rows1))
+    except Exception as e:
+        print(f"[baseline] Error: {type(e).__name__}: {e}")
+        return
+
+    if not rows1:
+        return
+
+    # Stage 2: free shadow replay of the baseline transcript through the
+    # monitor to find the point where it would have stopped.
+    stop = find_stop_point(rows1, task)
+
+    if stop is None:
+        await _complete(websocket, "monitor_only", _summary("monitor_only", [], deadlock=False, reason="no_deadlock_detected"))
+        await _complete(websocket, "protected", _summary("protected", [], deadlock=False, reason="no_deadlock_detected"))
+        return
+
+    monitor_rows = replay_monitor_rows(rows1, stop)
+    for row in monitor_rows:
+        await websocket.send_json({"type": "event", "workflow": "monitor_only", "data": row})
+        logs = log_utils.drain()
+        if logs.strip():
+            await websocket.send_json({"type": "log", "workflow": "monitor_only", "data": logs.rstrip("\n")})
+    await _complete(websocket, "monitor_only", _summary("monitor_only", monitor_rows, deadlock=True, reason="detector_stopped"))
+
+    # Stage 3: adaptive recovery seeded from the monitor stop point.
+    try:
+        messages = [{"sender": "user", "content": task, "error": False}] + [r["message"] for r in rows1[:stop + 1]]
+        seed = build_recovery_seed(messages, rows1[stop]["flags"], rows1[stop]["total_tokens"])
+        rows3 = await _run_stream(
+            websocket, "protected",
+            stream_single(task, coder_prompt, reviewer_prompt, use_sentinel=True, adaptive_interventions=True, start_turn=stop + 1, **seed),
+        )
+        turns = (stop + 1) + (rows3[-1]["iteration"] if rows3 else 0)
+        await _complete(websocket, "protected", _summary("protected", rows3, turns=turns))
+    except Exception as e:
+        print(f"[protected] Error: {type(e).__name__}: {e}")
+        await _complete(websocket, "protected", _summary("protected", [], deadlock=False, reason="error", turns=stop + 1))
 
 
 @app.websocket("/ws")
@@ -112,15 +139,7 @@ async def websocket_endpoint(websocket: WebSocket):
             task = message["task"]
             coder = message.get("coder_prompt", CODER)
             reviewer = message.get("reviewer_prompt", REVIEWER)
-            results = await asyncio.gather(
-                run_workflow(websocket, "baseline", task, coder, reviewer, False, False),
-                run_workflow(websocket, "monitor_only", task, coder, reviewer, True, False),
-                run_workflow(websocket, "protected", task, coder, reviewer, True, True),
-                return_exceptions=True,
-            )
-            for result in results:
-                if isinstance(result, Exception):
-                    print(f"[websocket] Unhandled error: {result}")
+            await run_benchmark(websocket, task, coder, reviewer)
     except WebSocketDisconnect:
         pass
     except Exception as e:

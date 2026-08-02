@@ -19,11 +19,9 @@ def get_secret(key):
 baseline_key  = get_secret("NVIDIA_API_KEY_BASELINE")
 protected_key = get_secret("NVIDIA_API_KEY_PROTECTED")
 
-# Model assignment per workflow:
-#   baseline  -> google/gemma-4-31b-it
-#   protected -> poolside/laguna-xs-2.1
-BASELINE_MODEL  = "google/gemma-4-31b-it"
-PROTECTED_MODEL = "poolside/laguna-xs-2.1"
+# One model for all workflow stages (baseline, monitor replay, adaptive
+# recovery) so the chained experiment isn't confounded by model differences.
+MODEL = "google/gemma-4-31b-it"
 
 baseline_client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
@@ -38,15 +36,15 @@ protected_client = OpenAI(
 
 # Map each client to the model it should call inside request_response().
 CLIENT_MODELS = {
-    baseline_client:  BASELINE_MODEL,
-    protected_client: PROTECTED_MODEL,
+    baseline_client:  MODEL,
+    protected_client: MODEL,
 }
 
 print("BASELINE key:", baseline_key[-6:] if baseline_key else "MISSING")
 print("PROTECTED key:", protected_key[-6:] if protected_key else "MISSING")
 def request_response(history,client):
     try:
-        model = CLIENT_MODELS.get(client, BASELINE_MODEL)
+        model = CLIENT_MODELS.get(client, MODEL)
         print(f"\n## LLM REQUEST ({len(history)} messages) model={model}")
         for i, msg in enumerate(history):
             role = msg.get("role", "?")

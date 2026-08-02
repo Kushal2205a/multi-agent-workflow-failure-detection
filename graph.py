@@ -5,11 +5,11 @@ from monitor import is_deadlock, detect_review_status
 from policy_engine import should_terminate_after_interventions
 from config import CODER, REVIEWER
   
-from llm_client import PROMPT
+from llm_client import PROMPT, baseline_client
 from agents import make_coder_node, make_reviewer_node
  
  
-def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bool = True, adaptive_interventions: bool = True):
+def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bool = True, adaptive_interventions: bool = True, entry_point: str = "coder"):
  
     coder_node    = make_coder_node(coder_prompt,client)
     reviewer_node = make_reviewer_node(reviewer_prompt,client)
@@ -44,7 +44,7 @@ def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bo
     workflow = StateGraph(AgentState)
     workflow.add_node("coder",    coder_node)
     workflow.add_node("reviewer", reviewer_node)
-    workflow.set_entry_point("coder")
+    workflow.set_entry_point(entry_point)
     workflow.add_conditional_edges("coder",    should_continue, {"reviewer": "reviewer", "end": END})
     workflow.add_conditional_edges("reviewer", should_continue, {"coder":    "coder",    "end": END})
  
@@ -54,7 +54,7 @@ def build_graph(coder_prompt: str, reviewer_prompt: str, client,use_sentinel: bo
 if __name__ == "__main__":
    
  
-    app = build_graph(CODER, REVIEWER, use_sentinel=True)
+    app = build_graph(CODER, REVIEWER, baseline_client, use_sentinel=True)
  
     initial_state: AgentState = {
         "messages":     [{"sender": "user", "content": PROMPT, "latency": 0, "timestamp": 0, "tokens": 0, "error": False}],

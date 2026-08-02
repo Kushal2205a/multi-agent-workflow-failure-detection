@@ -1,3 +1,4 @@
+import copy
 import re
 
 STATUS_REGEX = re.compile(
@@ -331,3 +332,78 @@ def update_flag(flag, updated_messages):
         current_flags = add_flag(current_flags,"escalation")
 
     return current_flags
+
+
+def detect_stop_point(messages, lag=1):
+    """Shadow-replay the detector over an unmonitored transcript.
+
+    Returns the index of the last message a monitored run would have kept
+    (the copy point for a recovery run), or None if detection never fires.
+
+    Detection is evaluated on a view delayed by `lag` messages, mimicking a
+    live monitor deciding *before* generating the next message. The iteration
+    is derived from the view length so the live `iteration > 2` guard and the
+    approve-first rule carry over.
+    """
+    for i in range(len(messages)):
+        end = i - lag
+        if end < 1:
+            continue
+        view = messages[:end]
+        iteration = len(view) - 1  # the initial user message isn't an agent turn
+        if iteration <= 2:
+            continue
+        if detect_review_status(view) == "approved":
+            return None
+        flags = update_flag([], view)
+        if is_deadlock({"flag": flags, "iteration": iteration}):
+            return len(view) - 1
+    return None
+
+
+# Hard-failure flags would kill the recovery run on turn one via
+# should_terminate_after_interventions, so they are stripped from the seed.
+# Soft flags are kept so the guidance policies can still fire.
+HARD_FAILURE_SEED_FLAGS = {"error_loop", "open_loop", "llm_error"}
+
+
+def find_stop_point(rows, task):
+    """Shadow-replay a baseline transcript (stream events) through the detector.
+
+    Returns the index into `rows` of the last message a monitored run would
+    have kept, or None if detection never fires (or the run approved).
+    `detect_stop_point` operates on the full transcript including the user
+    prompt, so it is rebuilt here and the returned index is shifted back into
+    the event list.
+    """
+    full = [{"sender": "user", "content": task, "error": False}] + [r["message"] for r in rows]
+    stop = detect_stop_point(full)
+    return stop - 1 if stop is not None else None
+
+
+def build_recovery_seed(messages, flags, tokens):
+    """Seed an adaptive run from a monitor stop point.
+
+    iteration is reset to 0 so recovery keeps the full MAX_TURNS budget and
+    the live `iteration <= 2` deadlock guard acts as a fresh grace period.
+    """
+    return {
+        "seed_messages": messages,
+        "seed_flags": [f for f in flags if f not in HARD_FAILURE_SEED_FLAGS],
+        "seed_iteration": 0,
+        "seed_tokens": tokens,
+    }
+
+
+def replay_monitor_rows(rows, stop):
+    """Clone baseline rows up to the stop point into monitor rows.
+
+    The stop row is marked as the detector termination point. This is the
+    free shadow replay: no extra LLM calls, the monitor column is just the
+    tagged baseline transcript.
+    """
+    monitor = [copy.deepcopy(r) for r in rows[:stop + 1]]
+    if monitor:
+        monitor[-1]["deadlock"] = True
+        monitor[-1]["terminated_by_detector"] = True
+    return monitor

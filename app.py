@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go
-from runner import stream_single
+from runner import stream_single, build_recovery_seed, replay_monitor_rows
+from monitor import find_stop_point
 from config import CODER, REVIEWER
 
 DEFAULT_TASK = """Build a production-ready FastAPI service for an in-memory LRU cache.
@@ -267,40 +268,35 @@ if run_clicked:
     turns_1        = rows1[-1]["iteration"]    if rows1 else 0
     status1.success(f"Complete — {turns_1} turns · {total_tokens_1:,} tokens")
 
-    
-    status2.info("Running…")
-    rows2 = []
+    stop = find_stop_point(rows1, task_prompt)
 
-    for event in stream_single(task_prompt, coder_prompt, reviewer_prompt, use_sentinel=True, adaptive_interventions=False):
-        rows2.append(event)
-        feed2.markdown(build_feed_md(rows2), unsafe_allow_html=True)
-        if event["deadlock"]:
-            break  
+    if stop is None:
+        status2.info("No loop pattern detected in baseline — monitor never fired.")
+        status3.info("Nothing to recover — adaptive run skipped.")
+        st.stop()
 
-    total_tokens_2 = rows2[-1]["total_tokens"] if rows2 else 0
-    turns_2        = rows2[-1]["iteration"]    if rows2 else 0
-    deadlock_flags = rows2[-1]["flags"]        if rows2 else []
-    detected       = rows2[-1]["deadlock"]     if rows2 else False
+    stop_flags = rows1[stop]["flags"]
 
-    if detected:
-        status2.error(
-            f"Loop detected, stopped at turn {turns_2} · "
-            f"{total_tokens_2:,} tokens · flags: {', '.join(deadlock_flags)}"
-        )
-    else:
-        status2.success(f"Complete,  {turns_2} turns · {total_tokens_2:,} tokens")
+    rows2 = replay_monitor_rows(rows1, stop)
+    feed2.markdown(build_feed_md(rows2), unsafe_allow_html=True)
+    total_tokens_2 = rows2[-1]["total_tokens"]
+    turns_2        = rows2[-1]["iteration"]
+    status2.error(
+        f"Loop detected, stopped at turn {turns_2} · "
+        f"{total_tokens_2:,} tokens · flags: {', '.join(stop_flags)}"
+    )
 
     status3.info("Running…")
     rows3 = []
+    seed_messages = [{"sender": "user", "content": task_prompt, "error": False}] + [r["message"] for r in rows1[:stop + 1]]
+    seed = build_recovery_seed(seed_messages, stop_flags, rows1[stop]["total_tokens"])
 
-    for event in stream_single(task_prompt, coder_prompt, reviewer_prompt, use_sentinel=True, adaptive_interventions=True):
+    for event in stream_single(task_prompt, coder_prompt, reviewer_prompt, use_sentinel=True, adaptive_interventions=True, start_turn=stop + 1, **seed):
         rows3.append(event)
         feed3.markdown(build_feed_md(rows3), unsafe_allow_html=True)
-        if event["deadlock"]:
-            break
 
     total_tokens_3 = rows3[-1]["total_tokens"] if rows3 else 0
-    turns_3        = rows3[-1]["iteration"]    if rows3 else 0
+    turns_3        = ((stop + 1) + rows3[-1]["iteration"]) if rows3 else (stop + 1)
     detected_3     = rows3[-1]["deadlock"]     if rows3 else False
     interventions  = rows3[-1].get("interventions", []) if rows3 else []
     applied        = sum(1 for i in interventions if i.get("outcome") != "skipped")

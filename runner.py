@@ -4,7 +4,7 @@ from policy_engine import should_terminate_after_interventions
 from config import MAX_TURNS
 from llm_client import baseline_client, protected_client
 
-def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentinel: bool = True, adaptive_interventions: bool = True):
+def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentinel: bool = True, adaptive_interventions: bool = True, seed_messages=None, seed_iteration: int = 0, seed_tokens: int = 0, seed_flags=None, start_turn: int = 0):
     
     client = protected_client if use_sentinel else baseline_client
     
@@ -14,10 +14,11 @@ def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentin
         client=client,
         use_sentinel=use_sentinel,
         adaptive_interventions=adaptive_interventions,
+        entry_point="reviewer" if seed_messages and seed_messages[-1]["sender"] == "coder" else "coder",
     )
 
     initial_state = {
-        "messages": [{
+        "messages": seed_messages if seed_messages else [{
             "sender":    "user",
             "content":   task,
             "latency":   0,
@@ -26,9 +27,9 @@ def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentin
             "error":     False,
         }],
         "sender":              "user",
-        "iteration":           0,
-        "flag":                [],
-        "total_tokens":        0,
+        "iteration":           seed_iteration,
+        "flag":                seed_flags if seed_flags else [],
+        "total_tokens":        seed_tokens,
         "task_completed":      False,
         "completion_turn":     0,
         "completion_reason":   "",
@@ -38,7 +39,7 @@ def stream_single(task: str, coder_prompt: str, reviewer_prompt: str, use_sentin
         "adaptive_interventions": adaptive_interventions,
     }
 
-    turn       = 0
+    turn       = start_turn
     prev_flags = []
     prev_intervention_count = 0
 
