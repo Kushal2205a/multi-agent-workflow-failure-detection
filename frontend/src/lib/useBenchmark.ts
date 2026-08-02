@@ -58,6 +58,10 @@ export function useBenchmark() {
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
 
+        if (msg.type === "ping") {
+          return;
+        }
+
         if (msg.type === "event") {
           const data = msg.data as StreamEvent;
           const updater = (prev: WorkflowState): WorkflowState => ({

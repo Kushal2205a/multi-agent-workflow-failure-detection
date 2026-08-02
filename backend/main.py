@@ -83,6 +83,17 @@ async def _complete(websocket, workflow_id, summary):
         pass
 
 
+async def _heartbeat(websocket):
+    """Send periodic pings so proxies/tunnels don't drop the idle websocket
+    during long LLM calls (no data frames flow for minutes between turns)."""
+    try:
+        while True:
+            await asyncio.sleep(10)
+            await websocket.send_json({"type": "ping"})
+    except Exception:
+        pass
+
+
 async def run_benchmark(websocket: WebSocket, task: str, coder_prompt: str, reviewer_prompt: str):
     # Baseline is the full unmonitored control: it streams to completion so the
     # benchmark can measure how many tokens a monitor+recovery run saves. The
@@ -95,6 +106,7 @@ async def run_benchmark(websocket: WebSocket, task: str, coder_prompt: str, revi
     monitor_sent = False
     adaptive_task = None
     gen = stream_single(task, coder_prompt, reviewer_prompt, use_sentinel=False, adaptive_interventions=False)
+    heartbeat = asyncio.create_task(_heartbeat(websocket))
 
     async def run_adaptive():
         try:
@@ -140,24 +152,29 @@ async def run_benchmark(websocket: WebSocket, task: str, coder_prompt: str, revi
     except WebSocketDisconnect:
         if adaptive_task:
             adaptive_task.cancel()
+        heartbeat.cancel()
         print("[baseline] client disconnected — stopping cleanly")
         return
     except Exception as e:
         if adaptive_task:
             adaptive_task.cancel()
+        heartbeat.cancel()
         print(f"[baseline] Error: {type(e).__name__}: {e}")
         return
 
     if not rows1:
+        heartbeat.cancel()
         return
 
     if stop is None:
+        heartbeat.cancel()
         await _complete(websocket, "monitor_only", _summary("monitor_only", [], deadlock=False, reason="no_deadlock_detected"))
         await _complete(websocket, "protected", _summary("protected", [], deadlock=False, reason="no_deadlock_detected"))
         return
 
     if adaptive_task:
         await adaptive_task
+    heartbeat.cancel()
 
 
 @app.websocket("/ws")

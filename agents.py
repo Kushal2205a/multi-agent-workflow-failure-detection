@@ -26,7 +26,7 @@ def make_coder_node(coder_prompt,client):
 
         state_for_prompt = {**state, "interventions": interventions, "active_policy": active_policy}
         history = build_history(state_for_prompt, coder_prompt, guidance_dict)
-        text, latency, tokens, comp_tokens, error_flag = request_response(history,client,max_tokens=4096)
+        text, latency, tokens, comp_tokens, error_flag = request_response(history,client,max_tokens=2048)
         flag = state["flag"][:]
  
         if text is None:
@@ -80,7 +80,6 @@ def make_coder_node(coder_prompt,client):
             "active_policy": recovery["active_policy"],
             "adaptive_interventions": state.get("adaptive_interventions", True),
         }
-    time.sleep(1)
     return coder_node
  
  
@@ -174,5 +173,4 @@ def make_reviewer_node(reviewer_prompt,client):
             "adaptive_interventions": state.get("adaptive_interventions", True),
         }
         
-    time.sleep(1)
     return reviewer_node

@@ -34,7 +34,20 @@ Evaluate the following categories.
 - Thread safety
 - Test coverage
 
-For every issue report
+Begin your response with the status line, exactly one of:
+
+STATUS: APPROVED
+STATUS: CHANGES_REQUIRED
+
+If every requirement is satisfied and there are no meaningful engineering concerns, output only
+
+STATUS: APPROVED
+
+Otherwise output
+
+STATUS: CHANGES_REQUIRED
+
+then list the findings. For every issue report
 
 Category:
 Severity:
@@ -43,14 +56,6 @@ Suggested Fix:
 
 Only report issues that materially improve correctness, reliability, or maintainability.
 
-Do not invent stylistic issues.
+Do not invent stylistic issues."""
 
-If every requirement is satisfied and there are no meaningful engineering concerns, output only
-
-STATUS: APPROVED
-
-Otherwise output the review findings, then end the review with
-
-STATUS: CHANGES_REQUIRED"""
-
-MAX_TURNS = 30
+MAX_TURNS = 8

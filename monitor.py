@@ -54,7 +54,9 @@ def detect_review_status(messages):
     preview = " | ".join(line.strip() for line in last_lines)
     print(f"[review_status] RAW: {preview}")
 
-    match = STATUS_REGEX.search(raw)
+    match = None
+    for m in STATUS_REGEX.finditer(raw):
+        match = m
     if match:
         status = match.group(1).upper()
         print(f"[review_status] PARSED: {status}")

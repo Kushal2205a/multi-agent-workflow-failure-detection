@@ -14,7 +14,8 @@ protected_key = get_secret("NVIDIA_API_KEY_PROTECTED")
 
 # One model for all workflow stages (baseline, monitor replay, adaptive
 # recovery) so the chained experiment isn't confounded by model differences.
-MODEL = "google/gemma-4-31b-it"
+# gemma-3-4b-it decodes ~5-10x faster than the 31B model, keeping demo runs short.
+MODEL = "google/gemma-3-4b-it"
 
 baseline_client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
