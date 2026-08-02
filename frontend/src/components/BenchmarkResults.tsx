@@ -197,7 +197,7 @@ export default function BenchmarkResults({
             <div className="text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider">
               Token Reduction
             </div>
-            <div className="text-3xl font-bold" style={{ color: "#22c55e" }}>
+            <div className="text-3xl font-bold" style={{ color: "#f59e0b" }}>
               {pctSaved.toFixed(0)}%
             </div>
             <div className="text-xs text-gray-500 mt-1.5 leading-relaxed">
@@ -293,9 +293,9 @@ export default function BenchmarkResults({
                   <span
                     className={`text-[11px] font-semibold ${
                       intervention.outcome === "recovered"
-                        ? "text-green-400"
+                        ? "text-amber-300"
                         : intervention.outcome === "failed"
-                          ? "text-red-400"
+                          ? "text-gray-500"
                           : "text-gray-400"
                     }`}
                   >

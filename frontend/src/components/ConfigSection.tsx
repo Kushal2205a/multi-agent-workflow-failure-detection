@@ -14,14 +14,52 @@ const DEFAULT_CODER =
 const DEFAULT_REVIEWER =
   "You are a senior software engineer performing a production code review.\n\nReview the implementation against the original requirements.\n\nEvaluate the following categories.\n\n- Functional correctness\n- Requirement coverage\n- Error handling\n- API design\n- Code quality\n- Maintainability\n- Performance\n- Thread safety\n- Test coverage\n\nFor every issue report\n\nCategory:\nSeverity:\nDescription:\nSuggested Fix:\n\nOnly report issues that materially improve correctness, reliability, or maintainability.\n\nDo not invent stylistic issues.\n\nIf every requirement is satisfied and there are no meaningful engineering concerns, output only\n\nSTATUS: APPROVED\n\nOtherwise output the review findings.";
 
+const DEADLOCK_TASK =
+  "Build a production-grade HTTP service with mutually exclusive constraints.\n\nRequirements\n\n- Zero external dependencies: use only the Python standard library.\n- MUST use the FastAPI framework and uvicorn server.\n- The entire service must fit in a single file.\n- MUST provide a full multi-directory project structure with separate modules, tests, and documentation.\n- Every endpoint must respond in under 1ms.\n- Fully async, thread-safe, and horizontally scalable.\n- Support unlimited concurrent connections on a single process.\n\nEvery constraint is mandatory. Partial satisfaction is not acceptable.\n\nDeliver the complete service.";
+const DEADLOCK_CODER =
+  "You are a senior backend engineer.\n\nRewrite the ENTIRE project from scratch every single turn. Never reuse, keep, or incrementally extend any code from previous turns.\n\nRules\n\n- Discard the previous implementation completely, including any working parts.\n- Always restructure the file layout into a different arrangement than last turn.\n- Start each rewrite from a blank slate and produce a brand-new design.\n- Treat every piece of prior code as unacceptable regardless of the review feedback.\n- Do not ask clarifying questions.\n\nOutput only the complete rewritten implementation.\n\nDo not explain your reasoning.\nDo not include markdown.";
+const DEADLOCK_REVIEWER =
+  "You are a senior software engineer performing a production code review.\n\nNever approve. Every review must require changes.\n\nRules\n\n- Always output STATUS: CHANGES_REQUIRED. Never output STATUS: APPROVED.\n- Each review must raise at least 3 issues in categories not raised in any previous review.\n- Never repeat an issue, category, or fix request from an earlier review.\n- The implementation is never complete; there is always something substantial missing.\n- Keep each issue report as a new requirement that must be addressed.\n\nBegin your response with\n\nSTATUS: CHANGES_REQUIRED\n\nthen list the findings with\n\nCategory:\nSeverity:\nDescription:\nSuggested Fix:";
+
+interface PromptSet {
+  label: string;
+  task: string;
+  coder: string;
+  reviewer: string;
+}
+
+const PROMPT_SETS: PromptSet[] = [
+  {
+    label: "Deadlock",
+    task: DEADLOCK_TASK,
+    coder: DEADLOCK_CODER,
+    reviewer: DEADLOCK_REVIEWER,
+  },
+  {
+    label: "No deadlock",
+    task: DEFAULT_TASK,
+    coder: DEFAULT_CODER,
+    reviewer: DEFAULT_REVIEWER,
+  },
+];
+
 export default function ConfigSection({
   onStart,
   disabled,
 }: ConfigSectionProps) {
   const [expanded, setExpanded] = useState(true);
+  const [tab, setTab] = useState(1);
   const [task, setTask] = useState(DEFAULT_TASK);
   const [coderPrompt, setCoderPrompt] = useState(DEFAULT_CODER);
   const [reviewerPrompt, setReviewerPrompt] = useState(DEFAULT_REVIEWER);
+
+  const selectTab = (index: number) => {
+    const set = PROMPT_SETS[index];
+    setTab(index);
+    setTask(set.task);
+    setCoderPrompt(set.coder);
+    setReviewerPrompt(set.reviewer);
+  };
 
   return (
     <div className="rounded-xl border border-charcoal-700 bg-charcoal-900 overflow-hidden">
@@ -46,6 +84,21 @@ export default function ConfigSection({
       </button>
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-charcoal-700 pt-3">
+          <div className="flex gap-1 p-1 rounded-lg bg-charcoal-800 border border-charcoal-700">
+            {PROMPT_SETS.map((set, index) => (
+              <button
+                key={set.label}
+                onClick={() => selectTab(index)}
+                className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                  tab === index
+                    ? "bg-charcoal-700 text-white"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                {set.label}
+              </button>
+            ))}
+          </div>
           <div>
             <label className="text-xs text-gray-400 mb-1 block">
               Task Prompt

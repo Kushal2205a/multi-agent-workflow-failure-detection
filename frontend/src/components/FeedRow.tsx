@@ -5,15 +5,8 @@ export default function FeedRow({ event }: { event: StreamEvent }) {
   const { sender, turn, tokens, latency, content } = message;
 
   const isDeadlock = deadlock;
-  const isCoder = sender === "coder" && !deadlock;
-  const isReviewer = sender === "reviewer";
 
-  const iconColor = isDeadlock ? "#dc2626" : isCoder ? "#22c55e" : "#3b82f6";
-  const labelColor = isDeadlock
-    ? "text-deadlock"
-    : isCoder
-      ? "text-protected"
-      : "text-reviewer";
+  const labelColor = isDeadlock ? "text-amber-300" : "text-gray-200";
 
   const preview = content
     .replace(/\n/g, " ")
@@ -23,10 +16,6 @@ export default function FeedRow({ event }: { event: StreamEvent }) {
 
   return (
     <div className="flex items-start gap-3 py-2 px-3 rounded-lg hover:bg-white/[0.03] transition-colors">
-      <div
-        className="w-2 h-2 mt-1.5 rounded-full flex-shrink-0"
-        style={{ backgroundColor: iconColor }}
-      />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 text-sm flex-wrap">
           <span className={`font-semibold ${labelColor}`}>
@@ -57,7 +46,7 @@ export default function FeedRow({ event }: { event: StreamEvent }) {
           {preview}&hellip;
         </p>
         {isDeadlock && (
-          <div className="mt-1 text-xs font-bold text-deadlock">
+          <div className="mt-1 text-xs font-bold text-amber-300">
             termination fallback:{" "}
             {(new_flags.length > 0 ? new_flags : flags).join(", ")}
           </div>

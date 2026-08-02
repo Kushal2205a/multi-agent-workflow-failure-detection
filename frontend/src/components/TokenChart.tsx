@@ -77,12 +77,12 @@ export default function TokenChart({
           />
           <Bar
             dataKey="Without detector"
-            fill="#ef4444"
+            fill="#94a3b8"
             radius={[4, 4, 0, 0]}
           />
           <Bar
             dataKey="With detector"
-            fill="#22c55e"
+            fill="#f59e0b"
             radius={[4, 4, 0, 0]}
           />
         </BarChart>

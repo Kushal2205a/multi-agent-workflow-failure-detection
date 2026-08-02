@@ -87,7 +87,7 @@ export default function ReviewerChart({
           <Line
             type="monotone"
             dataKey="Without detector"
-            stroke="#ef4444"
+            stroke="#94a3b8"
             strokeWidth={2}
             dot={{ r: 4 }}
             connectNulls
@@ -95,7 +95,7 @@ export default function ReviewerChart({
           <Line
             type="monotone"
             dataKey="With detector"
-            stroke="#22c55e"
+            stroke="#f59e0b"
             strokeWidth={2}
             dot={{ r: 4 }}
             connectNulls

@@ -14,35 +14,27 @@ export default function WorkflowPanel({ id, state }: WorkflowPanelProps) {
       ? "Monitor Only"
       : "Adaptive Intervention";
 
-  let statusIcon = "";
-  let statusColor = "#6b7280";
+  let statusClass = "text-gray-500";
   let shadowStyle = "";
   let statusText = "Ready";
-  let statsLine = "";
 
   if (state.running && !state.summary) {
-    statusIcon = "";
-    statusColor = "#3b82f6";
+    statusClass = "text-gray-300";
     statusText = "Running";
-    shadowStyle = "0 0 0 1px rgba(59,130,246,0.08)";
+    shadowStyle = "0 0 0 1px rgba(148,163,184,0.08)";
   } else if (state.summary?.error) {
-    statusIcon = "";
-    statusColor = "#f59e0b";
+    statusClass = "text-amber-300";
     statusText = `Error: ${state.summary.error}`;
   } else if (state.summary?.deadlock) {
-    statusIcon = "\uD83D\uDDD1\uFE0F";
-    statusColor = "#dc2626";
+    statusClass = "text-amber-300";
     statusText = id === "protected"
       ? `Termination fallback at turn ${state.summary.turns}`
-      : `Deadlock detected at turn ${state.summary.turns}`;
-    statsLine = `${state.summary.turns} turns \u00B7 ${state.summary.total_tokens.toLocaleString()} tokens`;
-    shadowStyle = "0 0 0 1px rgba(239,68,68,0.10)";
+      : `Deadlock detected at turn ${state.summary.turns} \u00B7 ${state.summary.total_tokens.toLocaleString()} tokens`;
+    shadowStyle = "0 0 0 1px rgba(245,158,11,0.10)";
   } else if (state.summary && !state.summary.error && !state.summary.deadlock) {
-    statusIcon = "";
-    statusColor = "#22c55e";
+    statusClass = "text-gray-300";
     statusText = `Completed \u00B7 ${state.summary.turns} turns \u00B7 ${state.summary.total_tokens.toLocaleString()} tokens`;
-    statsLine = `${state.summary.turns} turns \u00B7 ${state.summary.total_tokens.toLocaleString()} tokens`;
-    shadowStyle = "0 0 0 1px rgba(34,197,94,0.08)";
+    shadowStyle = "0 0 0 1px rgba(148,163,184,0.08)";
   }
 
   return (
@@ -50,21 +42,10 @@ export default function WorkflowPanel({ id, state }: WorkflowPanelProps) {
       className="rounded-xl border border-charcoal-700 bg-[#181818] overflow-hidden flex flex-col transition-shadow"
       style={{ boxShadow: shadowStyle || "none" }}
     >
-      <div className="px-5 py-4 border-b border-charcoal-700 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div
-            className="w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: statusColor }}
-          />
-          <h2 className="text-sm font-semibold text-white">{title}</h2>
-        </div>
-        <div className="flex items-center gap-3 text-xs">
-          <span style={{ color: statusColor }} className="font-medium">
-            {statusIcon} {statusText}
-          </span>
-          {statsLine && (
-            <span className="text-gray-500">{statsLine}</span>
-          )}
+      <div className="px-5 py-4 border-b border-charcoal-700 space-y-1">
+        <h2 className="text-sm font-semibold text-white">{title}</h2>
+        <div className="text-xs font-medium min-w-0">
+          <span className={statusClass}>{statusText}</span>
         </div>
       </div>
 
@@ -89,7 +70,7 @@ export default function WorkflowPanel({ id, state }: WorkflowPanelProps) {
           <span>{state.summary.turns} turns</span>
           <span>{state.summary.total_tokens.toLocaleString()} tokens</span>
           {state.summary.deadlock && (
-            <span className="text-deadlock font-semibold">
+            <span className="text-amber-300 font-semibold">
               Flags: {state.summary.flags.join(", ")}
             </span>
           )}
