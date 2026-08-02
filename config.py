@@ -49,7 +49,8 @@ If every requirement is satisfied and there are no meaningful engineering concer
 
 STATUS: APPROVED
 
+Otherwise output the review findings, then end the review with
 
-Otherwise output the review findings."""
+STATUS: CHANGES_REQUIRED"""
 
 MAX_TURNS = 30

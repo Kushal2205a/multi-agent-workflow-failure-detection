@@ -7,14 +7,7 @@ load_dotenv()
 
 PROMPT = "Build a FastAPI service for an in-memory LRU cache.\n\nRequirements:\n- Create key/value pairs\n- Retrieve values\n- Delete keys\n- Configurable cache size\n- Automatic eviction using LRU policy\n- Error handling\n- Unit tests\n\nReturn complete code."
 def get_secret(key):
-    val = os.getenv(key)
-    if val:
-        return val
-    try:
-        import streamlit as st
-        return st.secrets.get(key, None)
-    except (ImportError, RuntimeError):
-        return None
+    return os.getenv(key)
 
 baseline_key  = get_secret("NVIDIA_API_KEY_BASELINE")
 protected_key = get_secret("NVIDIA_API_KEY_PROTECTED")
@@ -42,7 +35,7 @@ CLIENT_MODELS = {
 
 print("BASELINE key:", baseline_key[-6:] if baseline_key else "MISSING")
 print("PROTECTED key:", protected_key[-6:] if protected_key else "MISSING")
-def request_response(history,client):
+def request_response(history,client,max_tokens=1024):
     try:
         model = CLIENT_MODELS.get(client, MODEL)
         print(f"\n## LLM REQUEST ({len(history)} messages) model={model}")
@@ -59,7 +52,7 @@ def request_response(history,client):
             messages=history,
             temperature=0.2,
             top_p=0.95,
-            max_tokens=1024,
+            max_tokens=max_tokens,
             stream=False
         )
 

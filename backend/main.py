@@ -84,50 +84,80 @@ async def _complete(websocket, workflow_id, summary):
 
 
 async def run_benchmark(websocket: WebSocket, task: str, coder_prompt: str, reviewer_prompt: str):
-    # Stage 1: baseline (detector never fires, runs to approval or MAX_TURNS).
+    # Baseline is the full unmonitored control: it streams to completion so the
+    # benchmark can measure how many tokens a monitor+recovery run saves. The
+    # monitor finds the stop point incrementally (after ~2 coder+reviewer turns)
+    # and the adaptive recovery runs as a separate async task on a different key
+    # while baseline keeps streaming.
+    loop = asyncio.get_running_loop()
+    rows1 = []
+    stop = None
+    monitor_sent = False
+    adaptive_task = None
+    gen = stream_single(task, coder_prompt, reviewer_prompt, use_sentinel=False, adaptive_interventions=False)
+
+    async def run_adaptive():
+        try:
+            messages = [{"sender": "user", "content": task, "error": False}] + [r["message"] for r in rows1[:stop + 1]]
+            seed = build_recovery_seed(messages, rows1[stop]["flags"], rows1[stop]["total_tokens"])
+            rows3 = await _run_stream(
+                websocket, "protected",
+                stream_single(task, coder_prompt, reviewer_prompt, use_sentinel=True, adaptive_interventions=True, start_turn=stop + 1, **seed),
+            )
+            turns = (stop + 1) + (rows3[-1]["iteration"] if rows3 else 0)
+            await _complete(websocket, "protected", _summary("protected", rows3, turns=turns))
+        except WebSocketDisconnect:
+            print("[protected] client disconnected — stopping cleanly")
+        except Exception as e:
+            print(f"[protected] Error: {type(e).__name__}: {e}")
+            await _complete(websocket, "protected", _summary("protected", [], deadlock=False, reason="error", turns=stop + 1))
+
     try:
-        rows1 = await _run_stream(
-            websocket, "baseline",
-            stream_single(task, coder_prompt, reviewer_prompt, use_sentinel=False, adaptive_interventions=False),
-        )
+        while True:
+            result = await loop.run_in_executor(executor, _safe_next, gen)
+            if result is None:
+                break
+            rows1.append(result)
+            await websocket.send_json({"type": "event", "workflow": "baseline", "data": result})
+            logs = log_utils.drain()
+            if logs.strip():
+                await websocket.send_json({"type": "log", "workflow": "baseline", "data": logs.rstrip("\n")})
+            if not monitor_sent and len(rows1) >= 4:
+                found = find_stop_point(rows1, task)
+                if found is not None:
+                    stop = found
+                    print(f"[monitor] stop point detected at rows[{stop}] after {len(rows1)} turns")
+                    monitor_rows = replay_monitor_rows(rows1, stop)
+                    for row in monitor_rows:
+                        await websocket.send_json({"type": "event", "workflow": "monitor_only", "data": row})
+                        logs = log_utils.drain()
+                        if logs.strip():
+                            await websocket.send_json({"type": "log", "workflow": "monitor_only", "data": logs.rstrip("\n")})
+                    await _complete(websocket, "monitor_only", _summary("monitor_only", monitor_rows, deadlock=True, reason="detector_stopped"))
+                    monitor_sent = True
+                    adaptive_task = asyncio.create_task(run_adaptive())
         await _complete(websocket, "baseline", _summary("baseline", rows1))
+    except WebSocketDisconnect:
+        if adaptive_task:
+            adaptive_task.cancel()
+        print("[baseline] client disconnected — stopping cleanly")
+        return
     except Exception as e:
+        if adaptive_task:
+            adaptive_task.cancel()
         print(f"[baseline] Error: {type(e).__name__}: {e}")
         return
 
     if not rows1:
         return
 
-    # Stage 2: free shadow replay of the baseline transcript through the
-    # monitor to find the point where it would have stopped.
-    stop = find_stop_point(rows1, task)
-
     if stop is None:
         await _complete(websocket, "monitor_only", _summary("monitor_only", [], deadlock=False, reason="no_deadlock_detected"))
         await _complete(websocket, "protected", _summary("protected", [], deadlock=False, reason="no_deadlock_detected"))
         return
 
-    monitor_rows = replay_monitor_rows(rows1, stop)
-    for row in monitor_rows:
-        await websocket.send_json({"type": "event", "workflow": "monitor_only", "data": row})
-        logs = log_utils.drain()
-        if logs.strip():
-            await websocket.send_json({"type": "log", "workflow": "monitor_only", "data": logs.rstrip("\n")})
-    await _complete(websocket, "monitor_only", _summary("monitor_only", monitor_rows, deadlock=True, reason="detector_stopped"))
-
-    # Stage 3: adaptive recovery seeded from the monitor stop point.
-    try:
-        messages = [{"sender": "user", "content": task, "error": False}] + [r["message"] for r in rows1[:stop + 1]]
-        seed = build_recovery_seed(messages, rows1[stop]["flags"], rows1[stop]["total_tokens"])
-        rows3 = await _run_stream(
-            websocket, "protected",
-            stream_single(task, coder_prompt, reviewer_prompt, use_sentinel=True, adaptive_interventions=True, start_turn=stop + 1, **seed),
-        )
-        turns = (stop + 1) + (rows3[-1]["iteration"] if rows3 else 0)
-        await _complete(websocket, "protected", _summary("protected", rows3, turns=turns))
-    except Exception as e:
-        print(f"[protected] Error: {type(e).__name__}: {e}")
-        await _complete(websocket, "protected", _summary("protected", [], deadlock=False, reason="error", turns=stop + 1))
+    if adaptive_task:
+        await adaptive_task
 
 
 @app.websocket("/ws")

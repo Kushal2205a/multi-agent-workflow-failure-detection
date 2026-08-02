@@ -1,6 +1,6 @@
 # Multi Agent Workflow Failure Detection
 
-A Streamlit dashboard for benchmarking multi agent LLM workflows and detecting inefficient looping behaviour in real time.
+A FastAPI + websocket backend with a React frontend for benchmarking multi agent LLM workflows and detecting inefficient looping behaviour in real time.
 
 The project compares a baseline workflow against a protected workflow that uses lightweight signals to stop wasteful iterations early and reduce token usage.
 
@@ -10,13 +10,13 @@ The project compares a baseline workflow against a protected workflow that uses 
 * Tracks token usage and latency per turn
 * Detects patterns such as repetition, stagnation, rejection loops, retry/error loops, and runaway escalation
 * Compares a baseline run with a detector-enabled run
-* Visualizes token growth and reviewer escalation over time
+* Streams live events over a websocket and visualizes token growth and reviewer escalation over time
 
 Multi agent workflows often keep refining long after the useful part is over. This project shows how to detect those inefficient trajectories without adding an extra LLM judge on every turn.
 
 ## Benchmark summary
 
-The dashboard runs two versions of the same task:
+The backend runs two versions of the same task:
 
 1. **Baseline workflow** - runs normally until the max turn limit
 2. **Protected workflow** - stops early when the detector flags a loop
@@ -48,7 +48,7 @@ These signals are combined to decide whether the workflow should stop early.
 2. The reviewer responds with feedback.
 3. The detector watches the conversation for loop like patterns.
 4. If the protected workflow crosses the threshold, execution stops early.
-5. The dashboard compares both runs and shows the savings.
+5. The frontend compares both runs and shows the savings.
 
 ## Screenshot
 
@@ -78,17 +78,25 @@ Create a `.env` file in the project root:
 NVIDIA_API_KEY="your_key_here"
 ```
 
-### 4. Run the dashboard
+### 4. Run the backend
 
 ```bash
-streamlit run app.py
+uvicorn backend.main:app --reload
+```
+
+### 5. Run the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
 ## How to use
 
 1. Enter a task prompt.
 2. Optionally adjust the coder and reviewer system prompts.
-3. Click **Run Benchmark**.
+3. Click **Run Benchmark** in the frontend.
 4. Compare the baseline run with the protected run.
 
 ## Interpreting the results

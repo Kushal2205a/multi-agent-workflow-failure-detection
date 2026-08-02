@@ -26,7 +26,7 @@ def make_coder_node(coder_prompt,client):
 
         state_for_prompt = {**state, "interventions": interventions, "active_policy": active_policy}
         history = build_history(state_for_prompt, coder_prompt, guidance_dict)
-        text, latency, tokens, comp_tokens, error_flag = request_response(history,client)
+        text, latency, tokens, comp_tokens, error_flag = request_response(history,client,max_tokens=4096)
         flag = state["flag"][:]
  
         if text is None:
