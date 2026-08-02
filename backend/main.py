@@ -1,5 +1,6 @@
 import sys
 import asyncio
+import copy
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
@@ -13,7 +14,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from runner import stream_single
-from monitor import find_stop_point, build_recovery_seed, replay_monitor_rows
+from monitor import build_recovery_seed, detect_live
 from config import CODER, REVIEWER
 
 app = FastAPI(title="Deadlock Orchestrator Benchmark")
@@ -95,20 +96,19 @@ async def _heartbeat(websocket):
 
 
 async def run_benchmark(websocket: WebSocket, task: str, coder_prompt: str, reviewer_prompt: str):
-    # Baseline is the full unmonitored control: it streams to completion so the
-    # benchmark can measure how many tokens a monitor+recovery run saves. The
-    # monitor finds the stop point incrementally (after ~2 coder+reviewer turns)
-    # and the adaptive recovery runs as a separate async task on a different key
-    # while baseline keeps streaming.
+    # Baseline streams unmonitored to completion. Monitor Only runs alongside it
+    # delayed by one message: it copies baseline rows (no extra LLM calls) and
+    # runs detection on those copies. When detection fires, monitor stops and
+    # the adaptive recovery starts as a separate async task seeded from the
+    # baseline history that already exists.
     loop = asyncio.get_running_loop()
     rows1 = []
-    stop = None
-    monitor_sent = False
+    monitor_done = False
     adaptive_task = None
     gen = stream_single(task, coder_prompt, reviewer_prompt, use_sentinel=False, adaptive_interventions=False)
     heartbeat = asyncio.create_task(_heartbeat(websocket))
 
-    async def run_adaptive():
+    async def run_adaptive(stop):
         try:
             messages = [{"sender": "user", "content": task, "error": False}] + [r["message"] for r in rows1[:stop + 1]]
             seed = build_recovery_seed(messages, rows1[stop]["flags"], rows1[stop]["total_tokens"])
@@ -124,6 +124,25 @@ async def run_benchmark(websocket: WebSocket, task: str, coder_prompt: str, revi
             print(f"[protected] Error: {type(e).__name__}: {e}")
             await _complete(websocket, "protected", _summary("protected", [], deadlock=False, reason="error", turns=stop + 1))
 
+    async def send_monitor_copy(index, deadlock=False):
+        row = copy.deepcopy(rows1[index])
+        if deadlock:
+            row["deadlock"] = True
+            row["terminated_by_detector"] = True
+        await websocket.send_json({"type": "event", "workflow": "monitor_only", "data": row})
+        logs = log_utils.drain()
+        if logs.strip():
+            await websocket.send_json({"type": "log", "workflow": "monitor_only", "data": logs.rstrip("\n")})
+
+    async def finish_monitor(deadlocked, stop):
+        if deadlocked:
+            monitor_rows = [copy.deepcopy(r) for r in rows1[:stop + 1]]
+            monitor_rows[stop]["deadlock"] = True
+            monitor_rows[stop]["terminated_by_detector"] = True
+            await _complete(websocket, "monitor_only", _summary("monitor_only", monitor_rows, deadlock=True, reason="detector_stopped", turns=stop + 1))
+        else:
+            await _complete(websocket, "monitor_only", _summary("monitor_only", rows1, deadlock=False, reason="no_deadlock_detected"))
+
     try:
         while True:
             result = await loop.run_in_executor(executor, _safe_next, gen)
@@ -134,21 +153,35 @@ async def run_benchmark(websocket: WebSocket, task: str, coder_prompt: str, revi
             logs = log_utils.drain()
             if logs.strip():
                 await websocket.send_json({"type": "log", "workflow": "baseline", "data": logs.rstrip("\n")})
-            if not monitor_sent and len(rows1) >= 4:
-                found = find_stop_point(rows1, task)
-                if found is not None:
-                    stop = found
-                    print(f"[monitor] stop point detected at rows[{stop}] after {len(rows1)} turns")
-                    monitor_rows = replay_monitor_rows(rows1, stop)
-                    for row in monitor_rows:
-                        await websocket.send_json({"type": "event", "workflow": "monitor_only", "data": row})
-                        logs = log_utils.drain()
-                        if logs.strip():
-                            await websocket.send_json({"type": "log", "workflow": "monitor_only", "data": logs.rstrip("\n")})
-                    await _complete(websocket, "monitor_only", _summary("monitor_only", monitor_rows, deadlock=True, reason="detector_stopped"))
-                    monitor_sent = True
-                    adaptive_task = asyncio.create_task(run_adaptive())
+
+            if not monitor_done and len(rows1) >= 2:
+                stop = detect_live(rows1[: len(rows1) - 1], task)
+                await send_monitor_copy(len(rows1) - 2, deadlock=stop is not None)
+                if stop is not None:
+                    print(f"[monitor] deadlock detected at rows[{stop}]")
+                    monitor_done = True
+                    await finish_monitor(True, stop)
+                    adaptive_task = asyncio.create_task(run_adaptive(stop))
+
         await _complete(websocket, "baseline", _summary("baseline", rows1))
+
+        if not monitor_done:
+            stop = detect_live(rows1, task) if rows1 else None
+            if stop is not None:
+                await send_monitor_copy(stop, deadlock=True)
+                print(f"[monitor] deadlock detected at rows[{stop}] (final row)")
+                monitor_done = True
+                await finish_monitor(True, stop)
+                adaptive_task = asyncio.create_task(run_adaptive(stop))
+            else:
+                if rows1:
+                    await send_monitor_copy(len(rows1) - 1)
+                await finish_monitor(False, None)
+                await _complete(websocket, "protected", _summary("protected", [], deadlock=False, reason="no_deadlock_detected"))
+
+        if adaptive_task:
+            await adaptive_task
+        heartbeat.cancel()
     except WebSocketDisconnect:
         if adaptive_task:
             adaptive_task.cancel()
@@ -161,20 +194,6 @@ async def run_benchmark(websocket: WebSocket, task: str, coder_prompt: str, revi
         heartbeat.cancel()
         print(f"[baseline] Error: {type(e).__name__}: {e}")
         return
-
-    if not rows1:
-        heartbeat.cancel()
-        return
-
-    if stop is None:
-        heartbeat.cancel()
-        await _complete(websocket, "monitor_only", _summary("monitor_only", [], deadlock=False, reason="no_deadlock_detected"))
-        await _complete(websocket, "protected", _summary("protected", [], deadlock=False, reason="no_deadlock_detected"))
-        return
-
-    if adaptive_task:
-        await adaptive_task
-    heartbeat.cancel()
 
 
 @app.websocket("/ws")

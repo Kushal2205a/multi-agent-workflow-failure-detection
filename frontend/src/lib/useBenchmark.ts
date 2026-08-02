@@ -113,6 +113,8 @@ export function useBenchmark() {
       };
 
       ws.onclose = () => {
+        if (wsRef.current !== ws) return;
+        wsRef.current = null;
         setRunning(false);
         setBaseline(
           (prev): WorkflowState =>

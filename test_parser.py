@@ -1,5 +1,5 @@
 """Unit tests for monitor parsing and signal detection."""
-from monitor import detect_rejection_loop, detect_review_status, detect_stagnation, update_flag, detect_stop_point, find_stop_point, build_recovery_seed, replay_monitor_rows
+from monitor import detect_rejection_loop, detect_review_status, detect_stagnation, update_flag, detect_stop_point, find_stop_point, build_recovery_seed, replay_monitor_rows, detect_live
 
 passed = 0
 failed = 0
@@ -182,6 +182,19 @@ rows = [
     for i, m in enumerate(stop_transcript[1:], start=1)
 ]
 check_eq("find_stop_point maps to event index", find_stop_point(rows, "task"), 2)
+
+live_rows = [
+    {"message": m, "iteration": i, "total_tokens": 100, "flags": [], "deadlock": False}
+    for i, m in enumerate(stop_transcript[1:4], start=1)
+]
+check_eq("detect_live fires on completing copy", detect_live(live_rows[:3], "task"), 2)
+check_eq("detect_live no-ops before 3 iterations", detect_live(live_rows[:2], "task"), None)
+
+live_approve = [
+    {"message": m, "iteration": i, "total_tokens": 100, "flags": [], "deadlock": False}
+    for i, m in enumerate(approve_transcript[1:4], start=1)
+]
+check_eq("detect_live ignores approved transcripts", detect_live(live_approve[:3], "task"), None)
 
 monitor_rows = replay_monitor_rows(rows, 2)
 check_eq("replay keeps rows through stop", len(monitor_rows), 3)

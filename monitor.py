@@ -363,6 +363,29 @@ def detect_stop_point(messages, lag=1):
     return None
 
 
+def detect_live(rows, task):
+    """Live monitor decision over the copied baseline rows shown so far.
+
+    Unlike ``detect_stop_point`` (which decides on a lag-2 view of a full
+    transcript), this decides immediately whenever the current copied
+    transcript completes a deadlock pattern, so the stop row is always the
+    last copied row. Returns the index into ``rows`` of the stop row, or None.
+
+    Non-monotonic by design: repeat flags are last-sender sensitive, so the
+    monitor re-evaluates each growing copy set and stops the moment its own
+    transcript triggers ``is_deadlock``.
+    """
+    full = [{"sender": "user", "content": task, "error": False}] + [r["message"] for r in rows]
+    iteration = len(full) - 1
+    if iteration <= 2:
+        return None
+    if detect_review_status(full) == "approved":
+        return None
+    if is_deadlock({"flag": update_flag([], full), "iteration": iteration}):
+        return len(full) - 2
+    return None
+
+
 # Hard-failure flags would kill the recovery run on turn one via
 # should_terminate_after_interventions, so they are stripped from the seed.
 # Soft flags are kept so the guidance policies can still fire.
