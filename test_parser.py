@@ -1,5 +1,7 @@
 """Unit tests for monitor parsing and signal detection."""
 from monitor import detect_rejection_loop, detect_review_status, detect_stagnation, update_flag, detect_stop_point, find_stop_point, build_recovery_seed, replay_monitor_rows, detect_live
+from prompt_builder import build_history
+from policy_engine import RuntimeGuidance
 
 passed = 0
 failed = 0
@@ -207,5 +209,13 @@ check_eq("seed strips hard flags", seed["seed_flags"], ["stagnation"])
 check_eq("seed resets iteration", seed["seed_iteration"], 0)
 check_eq("seed keeps tokens", seed["seed_tokens"], 500)
 check_eq("seed keeps messages", seed["seed_messages"], ["a"])
+
+state = {"messages": [{"sender": "user", "content": "task", "error": False}]}
+prompt = "coder prompt"
+guidance = RuntimeGuidance(enabled=True, target_agent="coder", trigger="stagnation", policy="focused_revision", instruction="OVERRIDE_STUB")
+guided = build_history(state, prompt, guidance.to_dict())
+plain = build_history(state, prompt, None)
+check_eq("guidance injected when enabled", "OVERRIDE_STUB" in guided[0]["content"], True)
+check_eq("guidance absent when disabled", "OVERRIDE_STUB" in plain[0]["content"], False)
 
 print(f"\n{passed + failed} tests, {passed} passed, {failed} failed")
