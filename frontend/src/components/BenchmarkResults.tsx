@@ -69,10 +69,11 @@ export default function BenchmarkResults({
   const detected = protectedState.rows.length > 0;
   const freshTokens = protectedState.rows.reduce((sum, r) => sum + (r.message.tokens ?? 0), 0);
   const freshTurns = protectedState.rows.length;
-  const tokensSaved = detected ? bs.total_tokens - freshTokens : 0;
+  const baselineCompleted = bs.task_completed;
+  const tokensSaved = detected && baselineCompleted ? bs.total_tokens - freshTokens : 0;
   const turnsSaved = detected ? bs.turns - freshTurns : 0;
   const turnReductionPct = detected && bs.turns > 0 ? (turnsSaved / bs.turns) * 100 : 0;
-  const pctSaved = detected && bs.total_tokens > 0 ? (tokensSaved / bs.total_tokens) * 100 : 0;
+  const pctSaved = detected && baselineCompleted && bs.total_tokens > 0 ? (tokensSaved / bs.total_tokens) * 100 : 0;
   const savedTurns = detected ? freshTurns : bs.turns;
 
   const showToast = useCallback((message: string, type: "success" | "error") => {
@@ -214,13 +215,19 @@ export default function BenchmarkResults({
           </div>
           <div className="rounded-xl border border-charcoal-700 bg-[#181818] p-5">
             <div className="text-xs text-gray-500 mb-1.5 font-medium uppercase tracking-wider">
-              Tokens Saved
+              {baselineCompleted ? "Tokens Saved" : "Recovery Cost"}
             </div>
             <div className="text-3xl font-bold text-white">
-              {tokensSaved.toLocaleString()}
+              {baselineCompleted ? tokensSaved.toLocaleString() : freshTokens.toLocaleString()}
             </div>
             <div className="text-xs text-gray-500 mt-1.5 leading-relaxed">
-              {pctSaved.toFixed(0)}% less than baseline
+              {baselineCompleted
+                ? `${pctSaved.toFixed(0)}% less than baseline`
+                : `fresh tokens to complete${
+                    bs.total_tokens > 0
+                      ? ` vs ${bs.total_tokens.toLocaleString()} wasted on deadlock`
+                      : ""
+                  }`}
             </div>
           </div>
           <div className="rounded-xl border border-charcoal-700 bg-[#181818] p-5">
