@@ -1,5 +1,8 @@
+import sys
 import time 
 from state import AgentState
+
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from monitor import add_flag,update_flag, detect_review_status
 from llm_client import request_response 

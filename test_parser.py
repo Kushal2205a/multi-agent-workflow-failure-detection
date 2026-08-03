@@ -58,6 +58,9 @@ check("overall status approved", "**OVERALL STATUS:** **APPROVED**", "approved")
 check("minor issues", "**STATUS:** MINOR_ISSUES", "changes_required")
 check("pending", "**STATUS:** PENDING", "changes_required")
 check("requires improvement", "**STATUS:** Requires Improvement", "changes_required")
+check("reject", "STATUS: REJECT", "changes_required")
+check("rejected bold", "**STATUS:** **REJECTED**", "changes_required")
+check("reject overall", "**OVERALL STATUS:** REJECT", "changes_required")
 
 # ── negative tests ─────────────────────────────────────────────────
 check("no status", "The code looks good.", None)
