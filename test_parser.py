@@ -215,7 +215,17 @@ prompt = "coder prompt"
 guidance = RuntimeGuidance(enabled=True, target_agent="coder", trigger="stagnation", policy="focused_revision", instruction="OVERRIDE_STUB")
 guided = build_history(state, prompt, guidance.to_dict())
 plain = build_history(state, prompt, None)
-check_eq("guidance injected when enabled", "OVERRIDE_STUB" in guided[0]["content"], True)
+check_eq("guidance injected when enabled", "OVERRIDE_STUB" in guided[-1]["content"], True)
 check_eq("guidance absent when disabled", "OVERRIDE_STUB" in plain[0]["content"], False)
+
+hist_state = {"messages": [
+    {"sender": "user", "content": "task", "error": False},
+    {"sender": "coder", "content": "STUB: not_implemented", "error": False},
+    {"sender": "reviewer", "content": "STATUS: CHANGES_REQUIRED\n1. stub", "error": False},
+]}
+guided_hist = build_history(hist_state, prompt, guidance.to_dict())
+check_eq("guidance lands on last user message", guided_hist[-1]["role"], "user")
+check_eq("guidance is last content", "OVERRIDE_STUB" in guided_hist[-1]["content"], True)
+check_eq("system prompt stays clean", "OVERRIDE_STUB" in guided_hist[0]["content"], False)
 
 print(f"\n{passed + failed} tests, {passed} passed, {failed} failed")

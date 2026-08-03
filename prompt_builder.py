@@ -26,10 +26,8 @@ def build_history(state, system_prompt, runtime_guidance=None):
 
     messages = []
 
-    system_with_guidance = system_prompt + _runtime_guidance_section(runtime_guidance)
-
     if all_messages:
-        messages.append({"role": "user", "content": system_with_guidance + "\n\n" + all_messages[0]["content"]})
+        messages.append({"role": "user", "content": system_prompt + "\n\n" + all_messages[0]["content"]})
 
     remaining = all_messages[1:]
     context = remaining[-4:] if len(remaining) > 4 else remaining
@@ -38,6 +36,14 @@ def build_history(state, system_prompt, runtime_guidance=None):
     for msg in context:
         messages.append({"role": next_role, "content": msg["content"]})
         next_role = "user" if next_role == "assistant" else "assistant"
+
+    # Runtime Guidance is appended to the final user message (the latest
+    # reviewer feedback) so it is the last content the model sees and wins
+    # over earlier absolute instructions. Alternation guarantees the last
+    # message is role "user".
+    guidance_section = _runtime_guidance_section(runtime_guidance)
+    if guidance_section and messages:
+        messages[-1] = {**messages[-1], "content": messages[-1]["content"] + guidance_section}
 
     return messages
 
